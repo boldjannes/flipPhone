@@ -308,10 +308,24 @@ def user_stats():
             (g.key_row['id'],),
         ).fetchone()[0]
 
-    return jsonify({
+    result = {
         'total': total,
         'by_trick': [{'trick': r['trick'], 'count': r['count']} for r in rows],
-    })
+    }
+
+    if g.key_row['is_admin']:
+        collector_rows = db.execute(
+            '''SELECT k.name AS collector, COUNT(*) AS count
+               FROM recordings r
+               JOIN api_keys k ON r.key_id = k.id
+               GROUP BY r.key_id
+               ORDER BY count DESC'''
+        ).fetchall()
+        result['by_collector'] = [
+            {'name': r['collector'], 'count': r['count']} for r in collector_rows
+        ]
+
+    return jsonify(result)
 
 
 # ──────────────────────────────────────────────

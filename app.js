@@ -892,6 +892,17 @@ async function renderDataset() {
     statsHtml = `<div class="trick-stats">${pillsHtml}</div>`;
   }
 
+  // Collector stats (admin only)
+  if (stats && stats.by_collector && stats.by_collector.length > 0) {
+    const collectorPills = stats.by_collector
+      .map(
+        (c) =>
+          `<div class="trick-stat-pill">${escapeHtml(c.name)}: <span>${c.count}</span></div>`,
+      )
+      .join("");
+    statsHtml += `<div class="card-title" style="margin-top:12px;margin-bottom:6px;">By Collector</div><div class="trick-stats">${collectorPills}</div>`;
+  }
+
   // Build a set of current reference recording IDs
   const refIds = new Set(Object.values(state.references).map(r => r.id));
 
