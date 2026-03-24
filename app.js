@@ -65,7 +65,6 @@ const reviewTrickName = $("review-trick-name");
 const reviewDuration = $("review-duration");
 const reviewSamples = $("review-samples");
 const reviewSampleRate = $("review-sample-rate");
-const reviewCanvas = $("review-canvas");
 const btnSave = $("btn-save");
 const btnDiscard = $("btn-discard");
 const datasetList = $("dataset-list");
@@ -832,7 +831,6 @@ function openReview(rec) {
   reviewSamples.textContent = rec.sampleCount;
   reviewSampleRate.textContent = rec.sampleRateHz + " Hz";
 
-  drawChart(rec.samples, reviewCanvas);
   reviewOverlay.classList.remove("hidden");
   initAnimation(rec.samples);
 }
@@ -843,63 +841,6 @@ function closeReview() {
   state.pendingRecording = null;
   statusMsg.textContent = "Ready – select a trick and record!";
   showRefAnimation(state.selectedTrick);
-}
-
-function drawChart(samples, canvas) {
-  const ctx = canvas.getContext("2d");
-  const W = canvas.clientWidth;
-  const H = canvas.clientHeight;
-  canvas.width = W;
-  canvas.height = H;
-
-  ctx.clearRect(0, 0, W, H);
-
-  if (!samples || samples.length < 2) return;
-
-  // Compute acceleration magnitude
-  const mags = samples.map((s) => Math.sqrt(s.ax ** 2 + s.ay ** 2 + s.az ** 2));
-  const maxMag = Math.max(...mags, 1);
-
-  const padX = 12;
-  const padY = 10;
-  const w = W - padX * 2;
-  const h = H - padY * 2;
-
-  // Background grid lines
-  ctx.strokeStyle = "#333";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = padY + (h / 4) * i;
-    ctx.beginPath();
-    ctx.moveTo(padX, y);
-    ctx.lineTo(padX + w, y);
-    ctx.stroke();
-  }
-
-  // Chart line
-  ctx.strokeStyle = "#00e5ff";
-  ctx.lineWidth = 2;
-  ctx.lineJoin = "round";
-  ctx.beginPath();
-  samples.forEach((_, i) => {
-    const x = padX + (i / (samples.length - 1)) * w;
-    const y = padY + h - (mags[i] / maxMag) * h;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-
-  // Fill under the line
-  ctx.lineTo(padX + w, padY + h);
-  ctx.lineTo(padX, padY + h);
-  ctx.closePath();
-  ctx.fillStyle = "rgba(0,229,255,0.08)";
-  ctx.fill();
-
-  // Axis label
-  ctx.fillStyle = "#888";
-  ctx.font = "10px system-ui";
-  ctx.fillText("|a| m/s²", padX + 2, padY + 10);
 }
 
 // ──────────────────────────────────────────────
