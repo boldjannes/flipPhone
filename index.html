@@ -1,186 +1,238 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#0d0d0d" />
-  <title>FlipPhone</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div id="app">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="theme-color" content="#0d0d0d" />
+    <title>FlipPhone!</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- ── Header ── -->
+      <header>
+        <h1>📱 FlipPhone</h1>
+        <span id="connected-as" class="connected-as"></span>
+        <span id="dataset-count">0</span>
+        <button id="btn-settings" class="settings-btn" aria-label="Settings">
+          ⚙️
+        </button>
+      </header>
 
-    <!-- ── Header ── -->
-    <header>
-      <h1>📱 FlipPhone</h1>
-      <span id="connected-as" class="connected-as"></span>
-      <span id="dataset-count">0</span>
-      <button id="btn-settings" class="settings-btn" aria-label="Settings">⚙️</button>
-    </header>
+      <!-- ── Tab bar ── -->
+      <nav class="tab-bar" role="tablist">
+        <button
+          class="tab-btn active"
+          data-tab="record"
+          role="tab"
+          aria-selected="true"
+        >
+          🎬 Record
+        </button>
+        <button
+          class="tab-btn"
+          data-tab="dataset"
+          role="tab"
+          aria-selected="false"
+        >
+          📂 Dataset
+        </button>
+      </nav>
 
-    <!-- ── Tab bar ── -->
-    <nav class="tab-bar" role="tablist">
-      <button class="tab-btn active" data-tab="record" role="tab" aria-selected="true">🎬 Record</button>
-      <button class="tab-btn"        data-tab="dataset" role="tab" aria-selected="false">📂 Dataset</button>
-    </nav>
+      <!-- ════════════════ RECORD VIEW ════════════════ -->
+      <section id="record-view" class="view active" role="tabpanel">
+        <!-- Sensor permission banner (iOS) -->
+        <div id="permission-banner" class="hidden">
+          <span>⚠️ Motion sensor access is required.</span>
+          <button id="request-permission-btn">Enable Sensors</button>
+        </div>
 
-    <!-- ════════════════ RECORD VIEW ════════════════ -->
-    <section id="record-view" class="view active" role="tabpanel">
+        <!-- Trick selector -->
+        <div class="card">
+          <div class="card-title">Select Trick</div>
+          <div class="trick-grid">
+            <!-- Populated by JS -->
+          </div>
+        </div>
 
-      <!-- Sensor permission banner (iOS) -->
-      <div id="permission-banner" class="hidden">
-        <span>⚠️ Motion sensor access is required.</span>
-        <button id="request-permission-btn">Enable Sensors</button>
-      </div>
+        <!-- Live sensor readout -->
+        <div class="card">
+          <div class="card-title">Live Sensors</div>
+          <div style="margin-bottom: 8px">
+            <div class="card-title" style="margin-bottom: 6px">
+              Accelerometer (m/s²)
+            </div>
+            <div class="sensor-grid">
+              <div class="sensor-val">
+                <div class="axis">X</div>
+                <div class="val" id="s-ax">–</div>
+              </div>
+              <div class="sensor-val">
+                <div class="axis">Y</div>
+                <div class="val" id="s-ay">–</div>
+              </div>
+              <div class="sensor-val">
+                <div class="axis">Z</div>
+                <div class="val" id="s-az">–</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card-title" style="margin-bottom: 6px">
+              Gyroscope (rad/s)
+            </div>
+            <div class="sensor-grid">
+              <div class="sensor-val">
+                <div class="axis">α</div>
+                <div class="val" id="s-gx">–</div>
+              </div>
+              <div class="sensor-val">
+                <div class="axis">β</div>
+                <div class="val" id="s-gy">–</div>
+              </div>
+              <div class="sensor-val">
+                <div class="axis">γ</div>
+                <div class="val" id="s-gz">–</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <!-- Trick selector -->
-      <div class="card">
-        <div class="card-title">Select Trick</div>
-        <div class="trick-grid">
+        <!-- Record button -->
+        <div class="card record-area">
+          <div id="timer-display">0:00.0</div>
+          <button id="record-btn" aria-label="Start / stop recording">
+            <span class="btn-icon">⏺</span>
+            <span class="btn-label">RECORD</span>
+          </button>
+          <p id="status-msg">Initializing sensors…</p>
+        </div>
+      </section>
+      <!-- ════════════════ END RECORD VIEW ════════════════ -->
+
+      <!-- ════════════════ DATASET VIEW ════════════════ -->
+      <section id="dataset-view" class="view" role="tabpanel">
+        <div class="dataset-header">
+          <h2>Dataset</h2>
+          <button class="icon-btn" id="btn-export-json">⬇ JSON</button>
+          <button class="icon-btn" id="btn-export-csv">⬇ CSV</button>
+        </div>
+
+        <div id="dataset-list">
           <!-- Populated by JS -->
         </div>
-      </div>
 
-      <!-- Live sensor readout -->
-      <div class="card">
-        <div class="card-title">Live Sensors</div>
-        <div style="margin-bottom:8px;">
-          <div class="card-title" style="margin-bottom:6px;">Accelerometer (m/s²)</div>
-          <div class="sensor-grid">
-            <div class="sensor-val">
-              <div class="axis">X</div>
-              <div class="val" id="s-ax">–</div>
-            </div>
-            <div class="sensor-val">
-              <div class="axis">Y</div>
-              <div class="val" id="s-ay">–</div>
-            </div>
-            <div class="sensor-val">
-              <div class="axis">Z</div>
-              <div class="val" id="s-az">–</div>
-            </div>
+        <!-- Admin key management panel (shown for admin keys only) -->
+        <div id="admin-panel" class="card admin-panel hidden">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+      <!-- ════════════════ END DATASET VIEW ════════════════ -->
+    </div>
+    <!-- /#app -->
+
+    <!-- ════════════════ REVIEW OVERLAY ════════════════ -->
+    <div
+      id="review-overlay"
+      class="hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="review-heading"
+    >
+      <div id="review-sheet">
+        <h2 id="review-heading">Save <span id="review-trick-name"></span>?</h2>
+
+        <div class="review-stats">
+          <div class="stat-box">
+            <div class="stat-val" id="review-duration">–</div>
+            <div class="stat-lbl">Duration</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="review-samples">–</div>
+            <div class="stat-lbl">Samples</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="review-sample-rate">–</div>
+            <div class="stat-lbl">Sample rate</div>
           </div>
         </div>
-        <div>
-          <div class="card-title" style="margin-bottom:6px;">Gyroscope (rad/s)</div>
-          <div class="sensor-grid">
-            <div class="sensor-val">
-              <div class="axis">α</div>
-              <div class="val" id="s-gx">–</div>
-            </div>
-            <div class="sensor-val">
-              <div class="axis">β</div>
-              <div class="val" id="s-gy">–</div>
-            </div>
-            <div class="sensor-val">
-              <div class="axis">γ</div>
-              <div class="val" id="s-gz">–</div>
-            </div>
-          </div>
+
+        <!-- Acceleration magnitude chart -->
+        <canvas
+          id="review-canvas"
+          aria-label="Acceleration magnitude over time"
+        ></canvas>
+
+        <div class="review-actions">
+          <button id="btn-discard">❌ Discard</button>
+          <button id="btn-save">✅ Save</button>
         </div>
-      </div>
-
-      <!-- Record button -->
-      <div class="card record-area">
-        <div id="timer-display">0:00.0</div>
-        <button id="record-btn" aria-label="Start / stop recording">
-          <span class="btn-icon">⏺</span>
-          <span class="btn-label">RECORD</span>
-        </button>
-        <p id="status-msg">Initializing sensors…</p>
-      </div>
-
-    </section>
-    <!-- ════════════════ END RECORD VIEW ════════════════ -->
-
-    <!-- ════════════════ DATASET VIEW ════════════════ -->
-    <section id="dataset-view" class="view" role="tabpanel">
-
-      <div class="dataset-header">
-        <h2>Dataset</h2>
-        <button class="icon-btn" id="btn-export-json">⬇ JSON</button>
-        <button class="icon-btn" id="btn-export-csv">⬇ CSV</button>
-      </div>
-
-      <div id="dataset-list">
-        <!-- Populated by JS -->
-      </div>
-
-      <!-- Admin key management panel (shown for admin keys only) -->
-      <div id="admin-panel" class="card admin-panel hidden">
-        <!-- Populated by JS -->
-      </div>
-
-    </section>
-    <!-- ════════════════ END DATASET VIEW ════════════════ -->
-
-  </div><!-- /#app -->
-
-  <!-- ════════════════ REVIEW OVERLAY ════════════════ -->
-  <div id="review-overlay" class="hidden" role="dialog" aria-modal="true" aria-labelledby="review-heading">
-    <div id="review-sheet">
-      <h2 id="review-heading">Save <span id="review-trick-name"></span>?</h2>
-
-      <div class="review-stats">
-        <div class="stat-box">
-          <div class="stat-val" id="review-duration">–</div>
-          <div class="stat-lbl">Duration</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val" id="review-samples">–</div>
-          <div class="stat-lbl">Samples</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-val" id="review-sample-rate">–</div>
-          <div class="stat-lbl">Sample rate</div>
-        </div>
-      </div>
-
-      <!-- Acceleration magnitude chart -->
-      <canvas id="review-canvas" aria-label="Acceleration magnitude over time"></canvas>
-
-      <div class="review-actions">
-        <button id="btn-discard">❌ Discard</button>
-        <button id="btn-save">✅ Save</button>
       </div>
     </div>
-  </div>
-  <!-- ════════════════ END REVIEW OVERLAY ════════════════ -->
+    <!-- ════════════════ END REVIEW OVERLAY ════════════════ -->
 
-  <!-- Toast notification -->
-  <div id="toast" role="status" aria-live="polite"></div>
+    <!-- Toast notification -->
+    <div id="toast" role="status" aria-live="polite"></div>
 
-  <!-- ════════════════ SETUP MODAL ════════════════ -->
-  <div id="setup-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="setup-heading">
-    <div class="modal-sheet">
-      <h2 id="setup-heading">🔑 Connect to server</h2>
-      <p class="modal-desc">Enter the server URL and your API key to start collecting flips.</p>
+    <!-- ════════════════ SETUP MODAL ════════════════ -->
+    <div
+      id="setup-modal"
+      class="modal-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="setup-heading"
+    >
+      <div class="modal-sheet">
+        <h2 id="setup-heading">🔑 Connect to server</h2>
+        <p class="modal-desc">
+          Enter the server URL and your API key to start collecting flips.
+        </p>
 
-      <div class="modal-field">
-        <label for="setup-server-url">Server URL</label>
-        <input type="url" id="setup-server-url" placeholder="https://your-server.com"
-               autocomplete="url" inputmode="url" />
-      </div>
+        <div class="modal-field">
+          <label for="setup-server-url">Server URL</label>
+          <input
+            type="url"
+            id="setup-server-url"
+            placeholder="https://your-server.com"
+            autocomplete="url"
+            inputmode="url"
+          />
+        </div>
 
-      <div class="modal-field">
-        <label for="setup-api-key">API Key</label>
-        <input type="text" id="setup-api-key" placeholder="fp_…"
-               autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="none" />
-      </div>
+        <div class="modal-field">
+          <label for="setup-api-key">API Key</label>
+          <input
+            type="text"
+            id="setup-api-key"
+            placeholder="fp_…"
+            autocomplete="off"
+            spellcheck="false"
+            autocorrect="off"
+            autocapitalize="none"
+          />
+        </div>
 
-      <p id="setup-error" class="setup-error" role="alert"></p>
+        <p id="setup-error" class="setup-error" role="alert"></p>
 
-      <div class="modal-actions">
-        <button id="setup-cancel-btn" class="modal-cancel-btn">Cancel</button>
-        <button id="setup-submit-btn" class="modal-submit-btn">Connect</button>
+        <div class="modal-actions">
+          <button id="setup-cancel-btn" class="modal-cancel-btn">Cancel</button>
+          <button id="setup-submit-btn" class="modal-submit-btn">
+            Connect
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-  <!-- ════════════════ END SETUP MODAL ════════════════ -->
+    <!-- ════════════════ END SETUP MODAL ════════════════ -->
 
-  <script src="app.js"></script>
-</body>
+    <script src="app.js"></script>
+  </body>
 </html>
