@@ -87,6 +87,11 @@ def init_db():
             samples         TEXT    NOT NULL,
             created_at      TEXT    NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS reference_recordings (
+            trick           TEXT    PRIMARY KEY,
+            recording_id    TEXT    NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+            set_at          TEXT    NOT NULL
+        );
     ''')
     conn.commit()
     conn.close()
@@ -137,7 +142,7 @@ def require_admin(f):
 def add_cors(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-API-Key'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     return response
 
 
@@ -307,6 +312,64 @@ def user_stats():
         'total': total,
         'by_trick': [{'trick': r['trick'], 'count': r['count']} for r in rows],
     })
+
+
+# ──────────────────────────────────────────────
+# /api/references  – reference recordings per trick
+# ──────────────────────────────────────────────
+@app.route('/api/references', methods=['GET'])
+@require_api_key
+def get_references():
+    """Return all reference recordings with full sample data."""
+    db = get_db()
+    rows = db.execute(
+        '''SELECT r.*, k.name AS collector, ref.trick AS ref_trick
+           FROM reference_recordings ref
+           JOIN recordings r ON ref.recording_id = r.id
+           JOIN api_keys k ON r.key_id = k.id'''
+    ).fetchall()
+    result = {}
+    for row in rows:
+        result[row['ref_trick']] = _row_to_dict(row)
+    return jsonify(result)
+
+
+@app.route('/api/references/<trick>', methods=['PUT'])
+@require_api_key
+@require_admin
+def set_reference(trick):
+    """Set a recording as the reference for a trick (admin only)."""
+    data = request.get_json(silent=True) or {}
+    recording_id = data.get('recording_id', '')
+    if not recording_id:
+        return jsonify({'error': 'recording_id is required'}), 400
+
+    db = get_db()
+    rec = db.execute('SELECT id FROM recordings WHERE id = ?', (recording_id,)).fetchone()
+    if not rec:
+        return jsonify({'error': 'Recording not found'}), 404
+
+    db.execute(
+        '''INSERT INTO reference_recordings (trick, recording_id, set_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(trick) DO UPDATE SET recording_id = excluded.recording_id, set_at = excluded.set_at''',
+        (trick, recording_id, _now_iso()),
+    )
+    db.commit()
+    return jsonify({'status': 'set', 'trick': trick, 'recording_id': recording_id})
+
+
+@app.route('/api/references/<trick>', methods=['DELETE'])
+@require_api_key
+@require_admin
+def delete_reference(trick):
+    """Remove the reference recording for a trick (admin only)."""
+    db = get_db()
+    result = db.execute('DELETE FROM reference_recordings WHERE trick = ?', (trick,))
+    db.commit()
+    if result.rowcount == 0:
+        return jsonify({'error': 'No reference for this trick'}), 404
+    return jsonify({'status': 'removed'})
 
 
 # ──────────────────────────────────────────────

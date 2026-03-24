@@ -47,6 +47,7 @@ const state = {
   sensorPermissionGranted: false,
   pendingRecording: null, // filled when review sheet opens
   isAdmin: false,
+  references: {},         // trick -> recording data (loaded from server)
 };
 
 // ──────────────────────────────────────────────
@@ -180,6 +181,35 @@ async function apiRevokeKey(keyId) {
   }
 }
 
+// Reference recordings
+async function apiGetReferences() {
+  const resp = await apiFetch("/api/references");
+  if (!resp.ok) return {};
+  return resp.json();
+}
+
+async function apiSetReference(trick, recordingId) {
+  const resp = await apiFetch(`/api/references/${encodeURIComponent(trick)}`, {
+    method: "PUT",
+    body: JSON.stringify({ recording_id: recordingId }),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `Server error ${resp.status}`);
+  }
+  return resp.json();
+}
+
+async function apiDeleteReference(trick) {
+  const resp = await apiFetch(`/api/references/${encodeURIComponent(trick)}`, {
+    method: "DELETE",
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error || `Server error ${resp.status}`);
+  }
+}
+
 // Build an export URL (includes api_key as query param for direct download)
 function exportUrl(format) {
   const cfg = getConfig();
@@ -209,6 +239,7 @@ function selectTrick(trick) {
   document.querySelectorAll(".trick-btn").forEach((b) => {
     b.classList.toggle("selected", b.textContent === trick);
   });
+  showRefAnimation(trick);
 }
 
 // ──────────────────────────────────────────────
@@ -380,6 +411,7 @@ function startRecording() {
     showToast("Enable sensors first!");
     return;
   }
+  stopRefAnimation();
   state.isRecording = true;
   state.samples = [];
   state.recordingStart = Date.now();
@@ -682,6 +714,27 @@ function animLoop() {
   anim.rafId = requestAnimationFrame(animLoop);
 }
 
+function getQuaternionAtTime(samples, orientations, time) {
+  let idx = 0;
+  for (let i = 0; i < samples.length - 1; i++) {
+    if (samples[i + 1].t >= time) { idx = i; break; }
+    idx = i;
+  }
+  const t0 = samples[idx].t;
+  const t1 = idx + 1 < samples.length ? samples[idx + 1].t : t0;
+  const frac = t1 > t0 ? (time - t0) / (t1 - t0) : 0;
+  const q0 = orientations[idx];
+  const q1 = idx + 1 < orientations.length ? orientations[idx + 1] : q0;
+  let dot = q0[0]*q1[0] + q0[1]*q1[1] + q0[2]*q1[2] + q0[3]*q1[3];
+  const sign = dot < 0 ? -1 : 1;
+  return qNorm([
+    q0[0] + (sign * q1[0] - q0[0]) * frac,
+    q0[1] + (sign * q1[1] - q0[1]) * frac,
+    q0[2] + (sign * q1[2] - q0[2]) * frac,
+    q0[3] + (sign * q1[3] - q0[3]) * frac,
+  ]);
+}
+
 function renderAnimFrame() {
   const canvas = anim.canvas;
   const ctx = anim.ctx;
@@ -692,33 +745,82 @@ function renderAnimFrame() {
   ctx.clearRect(0, 0, W, H);
 
   if (anim.orientations.length < 2) return;
+  const q = getQuaternionAtTime(anim.samples, anim.orientations, anim.currentTime);
+  drawPhone3D(ctx, W, H, q);
+}
 
-  // Find the quaternion for current time via interpolation
-  const samples = anim.samples;
-  let idx = 0;
-  for (let i = 0; i < samples.length - 1; i++) {
-    if (samples[i + 1].t >= anim.currentTime) { idx = i; break; }
-    idx = i;
+// ──────────────────────────────────────────────
+// Reference animation (looping in Record view)
+// ──────────────────────────────────────────────
+const refAnim = {
+  orientations: [],
+  samples: [],
+  totalTime: 0,
+  currentTime: 0,
+  rafId: null,
+  lastFrame: null,
+  active: false,
+};
+
+async function loadReferences() {
+  try {
+    state.references = await apiGetReferences();
+  } catch (_) {
+    state.references = {};
+  }
+}
+
+function showRefAnimation(trick) {
+  stopRefAnimation();
+  const card = $("ref-anim-card");
+  const ref = state.references[trick];
+  if (!ref || !ref.samples || ref.samples.length < 2) {
+    card.classList.add("hidden");
+    return;
+  }
+  $("ref-trick-label").textContent = trick;
+  card.classList.remove("hidden");
+  refAnim.samples = ref.samples;
+  refAnim.orientations = computeOrientations(ref.samples);
+  refAnim.totalTime = ref.samples[ref.samples.length - 1].t;
+  refAnim.currentTime = 0;
+  refAnim.active = true;
+  refAnim.lastFrame = performance.now();
+  refAnimLoop();
+}
+
+function stopRefAnimation() {
+  refAnim.active = false;
+  if (refAnim.rafId) cancelAnimationFrame(refAnim.rafId);
+  refAnim.rafId = null;
+}
+
+function refAnimLoop() {
+  if (!refAnim.active) return;
+  const now = performance.now();
+  const dt = now - refAnim.lastFrame;
+  refAnim.lastFrame = now;
+  refAnim.currentTime += dt * 0.5; // play at 0.5x speed
+
+  // Loop
+  if (refAnim.currentTime >= refAnim.totalTime) {
+    refAnim.currentTime = 0;
   }
 
-  // Linear interpolation between quaternions (NLERP)
-  const t0 = samples[idx].t;
-  const t1 = idx + 1 < samples.length ? samples[idx + 1].t : t0;
-  const frac = t1 > t0 ? (anim.currentTime - t0) / (t1 - t0) : 0;
-  const q0 = anim.orientations[idx];
-  const q1 = idx + 1 < anim.orientations.length ? anim.orientations[idx + 1] : q0;
+  const canvas = $("ref-anim-canvas");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.clientWidth;
+  const H = canvas.clientHeight;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
 
-  // NLERP
-  let dot = q0[0]*q1[0] + q0[1]*q1[1] + q0[2]*q1[2] + q0[3]*q1[3];
-  const sign = dot < 0 ? -1 : 1;
-  const q = qNorm([
-    q0[0] + (sign * q1[0] - q0[0]) * frac,
-    q0[1] + (sign * q1[1] - q0[1]) * frac,
-    q0[2] + (sign * q1[2] - q0[2]) * frac,
-    q0[3] + (sign * q1[3] - q0[3]) * frac,
-  ]);
+  if (refAnim.orientations.length >= 2) {
+    const q = getQuaternionAtTime(refAnim.samples, refAnim.orientations, refAnim.currentTime);
+    drawPhone3D(ctx, W, H, q);
+  }
 
-  drawPhone3D(ctx, W, H, q);
+  refAnim.rafId = requestAnimationFrame(refAnimLoop);
 }
 
 // ──────────────────────────────────────────────
@@ -740,6 +842,7 @@ function closeReview() {
   reviewOverlay.classList.add("hidden");
   state.pendingRecording = null;
   statusMsg.textContent = "Ready – select a trick and record!";
+  showRefAnimation(state.selectedTrick);
 }
 
 function drawChart(samples, canvas) {
@@ -853,16 +956,24 @@ async function renderDataset() {
     statsHtml = `<div class="trick-stats">${pillsHtml}</div>`;
   }
 
+  // Build a set of current reference recording IDs
+  const refIds = new Set(Object.values(state.references).map(r => r.id));
+
   const itemsHtml = ds
     .map((r) => {
       const date = new Date(r.timestamp).toLocaleString();
       const collector = r.collector ? ` · ${escapeHtml(r.collector)}` : "";
+      const isRef = refIds.has(r.id);
+      const refBtnHtml = state.isAdmin
+        ? `<button class="ref-btn${isRef ? " is-ref" : ""}" data-id="${escapeHtml(r.id)}" data-trick="${escapeHtml(r.trick)}">${isRef ? "★ Ref" : "Set Ref"}</button>`
+        : "";
       return `
       <div class="recording-item" data-id="${escapeHtml(r.id)}">
         <div class="trick-label">
-          <div class="trick-name">${escapeHtml(r.trick)}</div>
+          <div class="trick-name">${escapeHtml(r.trick)}${isRef ? ' <span style="color:var(--accent);font-size:0.75rem;">★ Reference</span>' : ""}</div>
           <div class="trick-meta">${date} · ${(r.durationMs / 1000).toFixed(2)}s · ${r.sampleCount} samples · ${r.sampleRateHz} Hz${collector}</div>
         </div>
+        ${refBtnHtml}
         <button class="item-delete" data-id="${escapeHtml(r.id)}" aria-label="Delete recording">🗑</button>
       </div>`;
     })
@@ -880,6 +991,28 @@ async function renderDataset() {
         renderDataset();
       } catch (err) {
         showToast("Delete failed: " + err.message);
+      }
+    });
+  });
+
+  // Attach reference button listeners (admin only)
+  datasetList.querySelectorAll(".ref-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      const id = e.currentTarget.dataset.id;
+      const trick = e.currentTarget.dataset.trick;
+      const isRef = e.currentTarget.classList.contains("is-ref");
+      try {
+        if (isRef) {
+          await apiDeleteReference(trick);
+          showToast(`Reference removed for ${trick}.`);
+        } else {
+          await apiSetReference(trick, id);
+          showToast(`★ Set as reference for ${trick}!`);
+        }
+        await loadReferences();
+        renderDataset();
+      } catch (err) {
+        showToast("Failed: " + err.message);
       }
     });
   });
@@ -1093,6 +1226,8 @@ async function submitSetup() {
     closeSetupModal();
     showToast(`✅ Connected as ${me.name}${me.is_admin ? " (admin)" : ""}`);
     updateHeaderName(me.name, me.is_admin);
+    await loadReferences();
+    showRefAnimation(state.selectedTrick);
     renderDataset();
   } catch (err) {
     errorEl.textContent = "Connection failed: " + err.message;
@@ -1183,6 +1318,8 @@ async function init() {
         const me = await resp.json();
         state.isAdmin = !!me.is_admin;
         updateHeaderName(me.name, me.is_admin);
+        await loadReferences();
+        showRefAnimation(state.selectedTrick);
         renderDataset();
       } else {
         openSetupModal(
