@@ -275,6 +275,41 @@ def delete_recording(rec_id):
 
 
 # ──────────────────────────────────────────────
+# /api/stats  – per-trick recording counts
+# ──────────────────────────────────────────────
+@app.route('/api/stats')
+@require_api_key
+def user_stats():
+    db = get_db()
+    if g.key_row['is_admin']:
+        rows = db.execute(
+            '''SELECT trick, COUNT(*) AS count
+               FROM recordings
+               GROUP BY trick
+               ORDER BY count DESC'''
+        ).fetchall()
+        total = db.execute('SELECT COUNT(*) FROM recordings').fetchone()[0]
+    else:
+        rows = db.execute(
+            '''SELECT trick, COUNT(*) AS count
+               FROM recordings
+               WHERE key_id = ?
+               GROUP BY trick
+               ORDER BY count DESC''',
+            (g.key_row['id'],),
+        ).fetchall()
+        total = db.execute(
+            'SELECT COUNT(*) FROM recordings WHERE key_id = ?',
+            (g.key_row['id'],),
+        ).fetchone()[0]
+
+    return jsonify({
+        'total': total,
+        'by_trick': [{'trick': r['trick'], 'count': r['count']} for r in rows],
+    })
+
+
+# ──────────────────────────────────────────────
 # /api/export
 # ──────────────────────────────────────────────
 def _get_export_rows(db):
@@ -297,6 +332,7 @@ def _get_export_rows(db):
 
 @app.route('/api/export/json')
 @require_api_key
+@require_admin
 def export_json():
     rows = _get_export_rows(get_db())
     if not rows:
@@ -316,6 +352,7 @@ def export_json():
 
 @app.route('/api/export/csv')
 @require_api_key
+@require_admin
 def export_csv():
     rows = _get_export_rows(get_db())
     if not rows:
