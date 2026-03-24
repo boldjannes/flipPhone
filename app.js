@@ -27,14 +27,12 @@
 const TRICKS = [
   "Kickflip",
   "Heelflip",
-  "Shuvit",
-  "360 Shuvit",
+  "FS Shuvit",
+  "FS 360 Shuvit",
+  "BS Shuvit",
+  "BS 360 Shuvit",
   "Treflip",
-  "Hardflip",
-  "Varial Kick",
-  "Varial Heel",
-  "Impossible",
-  "Custom",
+  "Late Kickflip",
 ];
 
 const CONFIG_KEY = "flipphone_config";
@@ -438,6 +436,292 @@ function updateTimer() {
 }
 
 // ──────────────────────────────────────────────
+// 3D Flip Animation (quaternion integration from gyro data)
+// ──────────────────────────────────────────────
+const anim = {
+  canvas: null,
+  ctx: null,
+  orientations: [],  // precomputed quaternions per sample
+  samples: [],
+  playing: false,
+  currentTime: 0,
+  totalTime: 0,
+  speed: 0.5,
+  rafId: null,
+  lastFrame: null,
+};
+
+// Quaternion helpers  [w, x, y, z]
+function qMul(a, b) {
+  return [
+    a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+    a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+    a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+    a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0],
+  ];
+}
+
+function qNorm(q) {
+  const len = Math.sqrt(q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+  if (len < 1e-10) return [1, 0, 0, 0];
+  return [q[0]/len, q[1]/len, q[2]/len, q[3]/len];
+}
+
+function qToMatrix(q) {
+  const [w, x, y, z] = q;
+  return [
+    1-2*(y*y+z*z),   2*(x*y-z*w),   2*(x*z+y*w),
+      2*(x*y+z*w), 1-2*(x*x+z*z),   2*(y*z-x*w),
+      2*(x*z-y*w),   2*(y*z+x*w), 1-2*(x*x+y*y),
+  ];
+}
+
+function computeOrientations(samples) {
+  const orientations = [[1, 0, 0, 0]]; // identity quaternion
+  for (let i = 1; i < samples.length; i++) {
+    const dt = (samples[i].t - samples[i-1].t) / 1000; // seconds
+    const gx = samples[i].gx;
+    const gy = samples[i].gy;
+    const gz = samples[i].gz;
+    const angle = Math.sqrt(gx*gx + gy*gy + gz*gz) * dt;
+    let dq;
+    if (angle < 1e-8) {
+      dq = [1, 0, 0, 0];
+    } else {
+      const ha = angle / 2;
+      const omega = angle / dt;
+      const ax = gx / omega;
+      const ay = gy / omega;
+      const az = gz / omega;
+      const sinHa = Math.sin(ha);
+      dq = [Math.cos(ha), ax * sinHa, ay * sinHa, az * sinHa];
+    }
+    orientations.push(qNorm(qMul(orientations[i-1], dq)));
+  }
+  return orientations;
+}
+
+function project(point, m, cx, cy, scale, dist) {
+  // Rotate point by matrix m
+  const rx = m[0]*point[0] + m[1]*point[1] + m[2]*point[2];
+  const ry = m[3]*point[0] + m[4]*point[1] + m[5]*point[2];
+  const rz = m[6]*point[0] + m[7]*point[1] + m[8]*point[2];
+  // Perspective projection
+  const z = dist + rz;
+  const f = dist / Math.max(z, 0.1);
+  return [cx + rx * scale * f, cy - ry * scale * f, z];
+}
+
+function drawPhone3D(ctx, W, H, q) {
+  const m = qToMatrix(q);
+  const cx = W / 2;
+  const cy = H / 2;
+  const scale = Math.min(W, H) * 0.28;
+  const dist = 4;
+
+  // Phone dimensions (normalized): width=0.5, height=1, depth=0.08
+  const pw = 0.5, ph = 1.0, pd = 0.08;
+  const hw = pw/2, hh = ph/2, hd = pd/2;
+
+  // 8 corners of the phone box
+  const corners = [
+    [-hw, -hh, -hd], [ hw, -hh, -hd], [ hw,  hh, -hd], [-hw,  hh, -hd], // back
+    [-hw, -hh,  hd], [ hw, -hh,  hd], [ hw,  hh,  hd], [-hw,  hh,  hd], // front
+  ];
+
+  const projected = corners.map(p => project(p, m, cx, cy, scale, dist));
+
+  // 6 faces: [indices, color]
+  const faces = [
+    { idx: [0,1,2,3], color: "#1a1a1a", label: null },       // back
+    { idx: [4,5,6,7], color: "#2a2a2a", label: "screen" },   // front (screen)
+    { idx: [0,1,5,4], color: "#222",    label: null },        // bottom
+    { idx: [2,3,7,6], color: "#222",    label: null },        // top
+    { idx: [0,3,7,4], color: "#252525", label: null },        // left
+    { idx: [1,2,6,5], color: "#252525", label: null },        // right
+  ];
+
+  // Compute face normals and sort back-to-front (painter's algorithm)
+  const facesWithDepth = faces.map(f => {
+    const ps = f.idx.map(i => projected[i]);
+    const avgZ = ps.reduce((s, p) => s + p[2], 0) / ps.length;
+    // Normal for visibility check (cross product in screen space)
+    const ax = ps[1][0] - ps[0][0], ay = ps[1][1] - ps[0][1];
+    const bx = ps[3][0] - ps[0][0], by = ps[3][1] - ps[0][1];
+    const cross = ax * by - ay * bx;
+    return { ...f, ps, avgZ, cross };
+  });
+
+  facesWithDepth.sort((a, b) => a.avgZ - b.avgZ);
+
+  for (const face of facesWithDepth) {
+    // Skip back-facing unless it's the screen (we want to see the phone from both sides)
+    ctx.beginPath();
+    ctx.moveTo(face.ps[0][0], face.ps[0][1]);
+    for (let i = 1; i < face.ps.length; i++) {
+      ctx.lineTo(face.ps[i][0], face.ps[i][1]);
+    }
+    ctx.closePath();
+    ctx.fillStyle = face.color;
+    ctx.fill();
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Draw screen content on front face
+    if (face.label === "screen" && face.cross < 0) {
+      // Screen area (slightly inset)
+      const inset = 0.07;
+      const screenCorners = [
+        [-hw + inset*pw, -hh + inset*ph, hd + 0.001],
+        [ hw - inset*pw, -hh + inset*ph, hd + 0.001],
+        [ hw - inset*pw,  hh - inset*ph, hd + 0.001],
+        [-hw + inset*pw,  hh - inset*ph, hd + 0.001],
+      ];
+      const sp = screenCorners.map(p => project(p, m, cx, cy, scale, dist));
+      ctx.beginPath();
+      ctx.moveTo(sp[0][0], sp[0][1]);
+      for (let i = 1; i < sp.length; i++) ctx.lineTo(sp[i][0], sp[i][1]);
+      ctx.closePath();
+      ctx.fillStyle = "#003344";
+      ctx.fill();
+
+      // Camera notch
+      const notchY = -hh + inset*ph * 1.5;
+      const notch = [
+        [-0.04, notchY, hd + 0.002],
+        [ 0.04, notchY, hd + 0.002],
+      ];
+      const np = notch.map(p => project(p, m, cx, cy, scale, dist));
+      ctx.beginPath();
+      ctx.arc((np[0][0]+np[1][0])/2, (np[0][1]+np[1][1])/2, 3, 0, Math.PI*2);
+      ctx.fillStyle = "#001a22";
+      ctx.fill();
+    }
+  }
+
+  // Draw shadow on ground
+  ctx.fillStyle = "rgba(0,229,255,0.04)";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + scale * 0.9, scale * 0.5, scale * 0.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function initAnimation(samples) {
+  anim.canvas = $("anim-canvas");
+  anim.ctx = anim.canvas.getContext("2d");
+  anim.samples = samples;
+  anim.orientations = computeOrientations(samples);
+  anim.totalTime = samples.length > 0 ? samples[samples.length - 1].t : 0;
+  anim.currentTime = 0;
+  anim.playing = false;
+  anim.lastFrame = null;
+
+  const scrubber = $("anim-scrubber");
+  const playBtn = $("anim-play");
+  const speedSel = $("anim-speed");
+  const timeEl = $("anim-time");
+
+  anim.speed = parseFloat(speedSel.value);
+
+  // Draw initial frame
+  renderAnimFrame();
+
+  // Controls
+  playBtn.onclick = () => {
+    if (anim.playing) {
+      stopAnim();
+    } else {
+      startAnim();
+    }
+  };
+
+  scrubber.oninput = () => {
+    anim.currentTime = (parseFloat(scrubber.value) / 100) * anim.totalTime;
+    timeEl.textContent = (anim.currentTime / 1000).toFixed(2) + "s";
+    if (!anim.playing) renderAnimFrame();
+  };
+
+  speedSel.onchange = () => {
+    anim.speed = parseFloat(speedSel.value);
+  };
+}
+
+function startAnim() {
+  if (anim.currentTime >= anim.totalTime) anim.currentTime = 0;
+  anim.playing = true;
+  anim.lastFrame = performance.now();
+  $("anim-play").textContent = "⏸";
+  animLoop();
+}
+
+function stopAnim() {
+  anim.playing = false;
+  $("anim-play").textContent = "▶";
+  if (anim.rafId) cancelAnimationFrame(anim.rafId);
+  anim.rafId = null;
+}
+
+function animLoop() {
+  if (!anim.playing) return;
+  const now = performance.now();
+  const dt = now - anim.lastFrame;
+  anim.lastFrame = now;
+  anim.currentTime += dt * anim.speed;
+
+  if (anim.currentTime >= anim.totalTime) {
+    anim.currentTime = anim.totalTime;
+    renderAnimFrame();
+    stopAnim();
+    return;
+  }
+
+  $("anim-scrubber").value = (anim.currentTime / anim.totalTime) * 100;
+  $("anim-time").textContent = (anim.currentTime / 1000).toFixed(2) + "s";
+  renderAnimFrame();
+  anim.rafId = requestAnimationFrame(animLoop);
+}
+
+function renderAnimFrame() {
+  const canvas = anim.canvas;
+  const ctx = anim.ctx;
+  const W = canvas.clientWidth;
+  const H = canvas.clientHeight;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.clearRect(0, 0, W, H);
+
+  if (anim.orientations.length < 2) return;
+
+  // Find the quaternion for current time via interpolation
+  const samples = anim.samples;
+  let idx = 0;
+  for (let i = 0; i < samples.length - 1; i++) {
+    if (samples[i + 1].t >= anim.currentTime) { idx = i; break; }
+    idx = i;
+  }
+
+  // Linear interpolation between quaternions (NLERP)
+  const t0 = samples[idx].t;
+  const t1 = idx + 1 < samples.length ? samples[idx + 1].t : t0;
+  const frac = t1 > t0 ? (anim.currentTime - t0) / (t1 - t0) : 0;
+  const q0 = anim.orientations[idx];
+  const q1 = idx + 1 < anim.orientations.length ? anim.orientations[idx + 1] : q0;
+
+  // NLERP
+  let dot = q0[0]*q1[0] + q0[1]*q1[1] + q0[2]*q1[2] + q0[3]*q1[3];
+  const sign = dot < 0 ? -1 : 1;
+  const q = qNorm([
+    q0[0] + (sign * q1[0] - q0[0]) * frac,
+    q0[1] + (sign * q1[1] - q0[1]) * frac,
+    q0[2] + (sign * q1[2] - q0[2]) * frac,
+    q0[3] + (sign * q1[3] - q0[3]) * frac,
+  ]);
+
+  drawPhone3D(ctx, W, H, q);
+}
+
+// ──────────────────────────────────────────────
 // Review sheet
 // ──────────────────────────────────────────────
 function openReview(rec) {
@@ -448,9 +732,11 @@ function openReview(rec) {
 
   drawChart(rec.samples, reviewCanvas);
   reviewOverlay.classList.remove("hidden");
+  initAnimation(rec.samples);
 }
 
 function closeReview() {
+  stopAnim();
   reviewOverlay.classList.add("hidden");
   state.pendingRecording = null;
   statusMsg.textContent = "Ready – select a trick and record!";
