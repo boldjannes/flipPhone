@@ -48,8 +48,9 @@ const state = {
   pendingRecording: null, // filled when review sheet opens
   isAdmin: false,
   references: {},         // trick -> recording data (loaded from server)
-  datasetSort: "date",    // "date" | "trick" | "collector"
-  datasetCache: null,     // cached recordings for re-sorting without refetch
+  datasetCache: null,     // cached recordings for re-rendering without refetch
+  filterTrick: "",        // admin filter: trick name or "" for all
+  filterCollector: "",    // admin filter: collector name or "" for all
 };
 
 // ──────────────────────────────────────────────
@@ -209,13 +210,6 @@ async function apiDeleteReference(trick) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err.error || `Server error ${resp.status}`);
   }
-}
-
-// Build an export URL (includes api_key as query param for direct download)
-function exportUrl(format) {
-  const cfg = getConfig();
-  const base = (cfg.serverUrl || "").replace(/\/$/, "");
-  return `${base}/api/export/${format}?api_key=${encodeURIComponent(cfg.apiKey || "")}`;
 }
 
 // ──────────────────────────────────────────────
@@ -855,18 +849,8 @@ function closeReview() {
 // Dataset view
 // ──────────────────────────────────────────────
 async function renderDataset(refetchData = true) {
-  // Hide export & sort buttons for non-admins
-  $("btn-export-json").style.display = state.isAdmin ? "" : "none";
-  $("btn-export-csv").style.display = state.isAdmin ? "" : "none";
-  $("sort-btns").style.display = state.isAdmin ? "" : "none";
-
-  // Update sort button state
-  document.querySelectorAll(".sort-btn").forEach((b) => {
-    b.classList.toggle("active", b.dataset.sort === state.datasetSort);
-  });
-
   if (refetchData) {
-    datasetList.innerHTML = '<p class="dataset-empty">Loading…</p>';
+    $("user-stats").innerHTML = '<p class="dataset-empty">Loading…</p>';
 
     let stats;
     try {
@@ -877,12 +861,13 @@ async function renderDataset(refetchData = true) {
       stats = null;
     }
 
-    let ds;
-    try {
-      ds = await apiLoadRecordings();
-    } catch (err) {
-      datasetList.innerHTML = `<p class="dataset-empty">⚠️ Could not load recordings.<br><small>${escapeHtml(err.message)}</small></p>`;
-      return;
+    let ds = [];
+    if (state.isAdmin) {
+      try {
+        ds = await apiLoadRecordings();
+      } catch (err) {
+        ds = [];
+      }
     }
 
     state.datasetCache = { ds, stats };
@@ -892,89 +877,109 @@ async function renderDataset(refetchData = true) {
 
   datasetCount.textContent = stats ? stats.total : ds.length;
 
-  if (ds.length === 0 && (!stats || stats.total === 0)) {
-    datasetCount.textContent = 0;
-    datasetList.innerHTML =
-      '<p class="dataset-empty">No recordings yet.<br>Record a trick and save it!</p>';
-    if (state.isAdmin) {
-      const panel = $("admin-panel");
-      if (panel) panel.classList.remove("hidden");
-      renderAdminPanel();
-    }
+  // ── User stats (always visible) ──
+  renderUserStats(stats);
+
+  // ── Admin section ──
+  const adminSection = $("admin-section");
+  if (state.isAdmin) {
+    adminSection.classList.remove("hidden");
+    renderFilters(ds, stats);
+    renderRecordingList(ds);
+    renderAdminPanel();
+  } else {
+    adminSection.classList.add("hidden");
+  }
+}
+
+function renderUserStats(stats) {
+  const el = $("user-stats");
+  if (!stats || stats.total === 0) {
+    el.innerHTML = '<p class="dataset-empty">No recordings yet. Record a trick and save it!</p>';
     return;
   }
 
-  // Sort recordings
-  const sorted = [...ds];
-  if (state.datasetSort === "trick") {
-    sorted.sort((a, b) => a.trick.localeCompare(b.trick) || new Date(b.timestamp) - new Date(a.timestamp));
-  } else if (state.datasetSort === "collector") {
-    sorted.sort((a, b) => (a.collector || "").localeCompare(b.collector || "") || new Date(b.timestamp) - new Date(a.timestamp));
-  }
-  // "date" is the default order from the server (newest first)
+  const pillsHtml = stats.by_trick
+    .map(
+      (t) =>
+        `<div class="trick-stat-pill">${escapeHtml(t.trick)}: <span>${t.count}</span></div>`,
+    )
+    .join("");
 
-  // Trick count summary from /api/stats
-  let statsHtml = "";
-  if (stats && stats.by_trick.length > 0) {
-    const pillsHtml = stats.by_trick
-      .map(
-        (t) =>
-          `<div class="trick-stat-pill">${escapeHtml(t.trick)}: <span>${t.count}</span></div>`,
-      )
-      .join("");
-    statsHtml = `<div class="trick-stats">${pillsHtml}</div>`;
-  }
+  let html = `<div class="trick-stats">${pillsHtml}</div>`;
 
   // Collector stats (admin only)
-  if (stats && stats.by_collector && stats.by_collector.length > 0) {
+  if (stats.by_collector && stats.by_collector.length > 0) {
     const collectorPills = stats.by_collector
       .map(
         (c) =>
           `<div class="trick-stat-pill">${escapeHtml(c.name)}: <span>${c.count}</span></div>`,
       )
       .join("");
-    statsHtml += `<div class="card-title" style="margin-top:12px;margin-bottom:6px;">By Collector</div><div class="trick-stats">${collectorPills}</div>`;
+    html += `<div class="card-title" style="margin-top:12px;margin-bottom:6px;">By Collector</div><div class="trick-stats">${collectorPills}</div>`;
   }
 
-  // Build a set of current reference recording IDs
-  const refIds = new Set(Object.values(state.references).map(r => r.id));
+  el.innerHTML = html;
+}
 
-  // Group by section header when sorting by trick or collector
-  let prevGroup = null;
-  const itemsHtml = sorted
+function renderFilters(ds, stats) {
+  const trickSelect = $("filter-trick");
+  const collectorSelect = $("filter-collector");
+
+  // Populate trick filter (preserve selection)
+  const tricks = stats?.by_trick?.map((t) => t.trick) || [];
+  const prevTrick = state.filterTrick;
+  trickSelect.innerHTML = '<option value="">All Tricks</option>' +
+    tricks.map((t) => `<option value="${escapeHtml(t)}"${t === prevTrick ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
+
+  // Populate collector filter
+  const collectors = [...new Set(ds.map((r) => r.collector).filter(Boolean))].sort();
+  const prevCollector = state.filterCollector;
+  collectorSelect.innerHTML = '<option value="">All Collectors</option>' +
+    collectors.map((c) => `<option value="${escapeHtml(c)}"${c === prevCollector ? " selected" : ""}>${escapeHtml(c)}</option>`).join("");
+}
+
+function renderRecordingList(ds) {
+  const list = $("dataset-list");
+
+  // Apply filters
+  let filtered = ds;
+  if (state.filterTrick) {
+    filtered = filtered.filter((r) => r.trick === state.filterTrick);
+  }
+  if (state.filterCollector) {
+    filtered = filtered.filter((r) => r.collector === state.filterCollector);
+  }
+
+  if (filtered.length === 0) {
+    list.innerHTML = '<p class="dataset-empty">No recordings match the filter.</p>';
+    return;
+  }
+
+  const refIds = new Set(Object.values(state.references).map((r) => r.id));
+
+  const itemsHtml = filtered
     .map((r) => {
-      let groupHeader = "";
-      if (state.datasetSort === "trick" && r.trick !== prevGroup) {
-        prevGroup = r.trick;
-        groupHeader = `<div class="dataset-group-header">${escapeHtml(r.trick)}</div>`;
-      } else if (state.datasetSort === "collector" && (r.collector || "") !== prevGroup) {
-        prevGroup = r.collector || "";
-        groupHeader = `<div class="dataset-group-header">${escapeHtml(r.collector || "Unknown")}</div>`;
-      }
-
       const date = new Date(r.timestamp).toLocaleString();
       const collector = r.collector ? ` · ${escapeHtml(r.collector)}` : "";
       const isRef = refIds.has(r.id);
-      const refBtnHtml = state.isAdmin
-        ? `<button class="ref-btn${isRef ? " is-ref" : ""}" data-id="${escapeHtml(r.id)}" data-trick="${escapeHtml(r.trick)}">${isRef ? "★ Ref" : "Set Ref"}</button>`
-        : "";
-      return `${groupHeader}
+      return `
       <div class="recording-item" data-id="${escapeHtml(r.id)}">
         <div class="trick-label">
-          <div class="trick-name">${escapeHtml(r.trick)}${isRef ? ' <span style="color:var(--accent);font-size:0.75rem;">★ Reference</span>' : ""}</div>
-          <div class="trick-meta">${date} · ${(r.durationMs / 1000).toFixed(2)}s · ${r.sampleCount} samples · ${r.sampleRateHz} Hz${collector}</div>
+          <div class="trick-name">${escapeHtml(r.trick)}${isRef ? ' <span style="color:var(--accent);font-size:0.75rem;">★ Ref</span>' : ""}</div>
+          <div class="trick-meta">${date} · ${(r.durationMs / 1000).toFixed(2)}s · ${r.sampleCount} samples${collector}</div>
         </div>
         <button class="item-play" data-id="${escapeHtml(r.id)}" aria-label="Play animation">▶</button>
-        ${refBtnHtml}
+        <button class="ref-btn${isRef ? " is-ref" : ""}" data-id="${escapeHtml(r.id)}" data-trick="${escapeHtml(r.trick)}">${isRef ? "★ Ref" : "Set Ref"}</button>
         <button class="item-delete" data-id="${escapeHtml(r.id)}" aria-label="Delete recording">🗑</button>
       </div>`;
     })
     .join("");
 
-  datasetList.innerHTML = statsHtml + itemsHtml;
+  list.innerHTML = itemsHtml;
 
-  // Attach play listeners – open review overlay with animation
-  datasetList.querySelectorAll(".item-play").forEach((btn) => {
+  // Attach listeners
+  list.querySelectorAll(".item-play").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const id = e.currentTarget.dataset.id;
       const rec = ds.find((r) => r.id === id);
@@ -982,8 +987,7 @@ async function renderDataset(refetchData = true) {
     });
   });
 
-  // Attach delete listeners
-  datasetList.querySelectorAll(".item-delete").forEach((btn) => {
+  list.querySelectorAll(".item-delete").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       const id = e.currentTarget.dataset.id;
       try {
@@ -996,8 +1000,7 @@ async function renderDataset(refetchData = true) {
     });
   });
 
-  // Attach reference button listeners (admin only)
-  datasetList.querySelectorAll(".ref-btn").forEach((btn) => {
+  list.querySelectorAll(".ref-btn").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       const id = e.currentTarget.dataset.id;
       const trick = e.currentTarget.dataset.trick;
@@ -1011,19 +1014,12 @@ async function renderDataset(refetchData = true) {
           showToast(`★ Set as reference for ${trick}!`);
         }
         await loadReferences();
-        renderDataset();
+        renderDataset(false);
       } catch (err) {
         showToast("Failed: " + err.message);
       }
     });
   });
-
-  // Render admin key panel if admin
-  if (state.isAdmin) {
-    const panel = $("admin-panel");
-    if (panel) panel.classList.remove("hidden");
-    renderAdminPanel();
-  }
 }
 
 async function renderAdminPanel() {
@@ -1144,17 +1140,6 @@ function showKeyModal(name, key) {
 
 function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// ──────────────────────────────────────────────
-// Export (redirect to server for download)
-// ──────────────────────────────────────────────
-function exportJSON() {
-  window.location.href = exportUrl("json");
-}
-
-function exportCSV() {
-  window.location.href = exportUrl("csv");
 }
 
 // ──────────────────────────────────────────────
@@ -1291,17 +1276,16 @@ async function init() {
     closeReview();
   });
 
-  // Sort buttons
-  document.querySelectorAll(".sort-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.datasetSort = btn.dataset.sort;
-      renderDataset(false);
-    });
+  // Filter dropdowns (admin)
+  $("filter-trick").addEventListener("change", (e) => {
+    state.filterTrick = e.target.value;
+    renderDataset(false);
+  });
+  $("filter-collector").addEventListener("change", (e) => {
+    state.filterCollector = e.target.value;
+    renderDataset(false);
   });
 
-  // Export buttons
-  $("btn-export-json").addEventListener("click", exportJSON);
-  $("btn-export-csv").addEventListener("click", exportCSV);
 
   // Settings button (re-open setup modal)
   $("btn-settings").addEventListener("click", () => openSetupModal());

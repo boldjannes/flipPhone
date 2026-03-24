@@ -133,24 +133,35 @@
 
       <!-- ════════════════ DATASET VIEW ════════════════ -->
       <section id="dataset-view" class="view" role="tabpanel">
-        <div class="dataset-header">
-          <h2>Dataset</h2>
-          <div class="sort-btns" id="sort-btns">
-            <button class="sort-btn active" data-sort="date">Date</button>
-            <button class="sort-btn" data-sort="trick">Trick</button>
-            <button class="sort-btn" data-sort="collector">Person</button>
+        <!-- User stats (always visible) -->
+        <div class="card">
+          <div class="card-title">My Recordings</div>
+          <div id="user-stats">
+            <!-- Populated by JS -->
           </div>
-          <button class="icon-btn" id="btn-export-json">⬇ JSON</button>
-          <button class="icon-btn" id="btn-export-csv">⬇ CSV</button>
         </div>
 
-        <div id="dataset-list">
-          <!-- Populated by JS -->
-        </div>
+        <!-- Admin section (hidden for non-admins) -->
+        <div id="admin-section" class="hidden">
+          <!-- Filter bar -->
+          <div class="filter-bar">
+            <select id="filter-trick" class="filter-select">
+              <option value="">All Tricks</option>
+            </select>
+            <select id="filter-collector" class="filter-select">
+              <option value="">All Collectors</option>
+            </select>
+          </div>
 
-        <!-- Admin key management panel (shown for admin keys only) -->
-        <div id="admin-panel" class="card admin-panel hidden">
-          <!-- Populated by JS -->
+          <!-- Recording list -->
+          <div id="dataset-list">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Key management -->
+          <div id="admin-panel" class="card admin-panel">
+            <!-- Populated by JS -->
+          </div>
         </div>
       </section>
       <!-- ════════════════ END DATASET VIEW ════════════════ -->
