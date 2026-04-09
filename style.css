@@ -834,34 +834,6 @@ header h1 {
   display: block;
 }
 
-.model-toggle-row {
-  display: flex;
-  justify-content: center;
-  margin: 8px 0 4px;
-}
-
-.model-toggle-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  color: var(--text-dim);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: border-color 0.2s, color 0.2s;
-}
-
-.model-toggle-btn:active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.model-toggle-icon {
-  font-size: 1rem;
-}
 
 .ref-btn {
   padding: 6px 10px;

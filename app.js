@@ -51,7 +51,6 @@ const state = {
   datasetCache: null,     // cached recordings for re-rendering without refetch
   filterTrick: "",        // admin filter: trick name or "" for all
   filterCollector: "",    // admin filter: collector name or "" for all
-  animModel: localStorage.getItem("flipphone_anim_model") || "phone", // "phone" or "skateboard"
 };
 
 // ──────────────────────────────────────────────
@@ -255,10 +254,9 @@ function onMotion(e) {
   };
   latestGyr = {
     // rotationRate is deg/s – convert to rad/s
-    // alpha = rotation around Z, beta = around X, gamma = around Y
-    x: ((gyr.beta ?? 0) * Math.PI) / 180,
-    y: ((gyr.gamma ?? 0) * Math.PI) / 180,
-    z: ((gyr.alpha ?? 0) * Math.PI) / 180,
+    x: ((gyr.alpha ?? 0) * Math.PI) / 180,
+    y: ((gyr.beta ?? 0) * Math.PI) / 180,
+    z: ((gyr.gamma ?? 0) * Math.PI) / 180,
   };
 
   // Update live display
@@ -651,127 +649,8 @@ function drawPhone3D(ctx, W, H, q) {
 
 }
 
-function drawSkateboard3D(ctx, W, H, q) {
-  const m = qToMatrix(q);
-  const cx = W / 2;
-  const cy = H / 2;
-  const scale = Math.min(W, H) * 0.28;
-  const dist = 4;
-
-  // Match phone axes: X = width(0.5), Y = length(1.0), Z = thickness
-  // Phone: width=0.5, height=1.0, depth=0.08
-  // Board: width=0.5, length=1.0, depth=0.04 (same X/Y, thinner Z)
-  const bw = 0.5, bl = 1.0, bd = 0.04;
-  const hw = bw/2, hl = bl/2, hd = bd/2;
-
-  // Nose/tail kick along Y axis (length)
-  const kick = 0.1;
-  const kickLen = 0.18;
-  const flatHL = hl - kickLen;
-
-  // 16 points: bottom 0-7, top 8-15
-  // Y is the long axis (matching phone height axis)
-  const pts = [
-    // bottom face (z = -hd), with kick at Y extremes
-    [-hw, -hl, -hd + kick], [-hw, -flatHL, -hd], [-hw, flatHL, -hd], [-hw, hl, -hd + kick],
-    [ hw, -hl, -hd + kick], [ hw, -flatHL, -hd], [ hw, flatHL, -hd], [ hw, hl, -hd + kick],
-    // top face (z = +hd), with kick at Y extremes
-    [-hw, -hl, hd + kick], [-hw, -flatHL, hd], [-hw, flatHL, hd], [-hw, hl, hd + kick],
-    [ hw, -hl, hd + kick], [ hw, -flatHL, hd], [ hw, flatHL, hd], [ hw, hl, hd + kick],
-  ];
-
-  const projected = pts.map(p => project(p, m, cx, cy, scale, dist));
-
-  // Faces
-  const faces = [
-    { idx: [0,1,2,3,7,6,5,4], color: "#3a2010" },            // bottom
-    { idx: [8,9,10,11,15,14,13,12], color: "#1a1a1a", grip: true }, // top (griptape)
-    { idx: [0,1,9,8], color: "#4a2a15" },     // left side nose
-    { idx: [1,2,10,9], color: "#4a2a15" },     // left side mid
-    { idx: [2,3,11,10], color: "#4a2a15" },    // left side tail
-    { idx: [4,5,13,12], color: "#4a2a15" },    // right side nose
-    { idx: [5,6,14,13], color: "#4a2a15" },    // right side mid
-    { idx: [6,7,15,14], color: "#4a2a15" },    // right side tail
-    { idx: [0,4,12,8], color: "#4a2a15" },     // nose end
-    { idx: [3,7,15,11], color: "#4a2a15" },    // tail end
-  ];
-
-  const facesWithDepth = faces.map(f => {
-    const ps = f.idx.map(i => projected[i]);
-    const avgZ = ps.reduce((s, p) => s + p[2], 0) / ps.length;
-    // Normal via cross product for backface culling
-    const ax = ps[1][0] - ps[0][0], ay = ps[1][1] - ps[0][1];
-    const bx = ps[ps.length-1][0] - ps[0][0], by = ps[ps.length-1][1] - ps[0][1];
-    const cross = ax * by - ay * bx;
-    return { ...f, ps, avgZ, cross };
-  });
-
-  facesWithDepth.sort((a, b) => a.avgZ - b.avgZ);
-
-  for (const face of facesWithDepth) {
-    // Skip back-facing polygons (no see-through)
-    if (face.cross > 0) continue;
-
-    ctx.beginPath();
-    ctx.moveTo(face.ps[0][0], face.ps[0][1]);
-    for (let i = 1; i < face.ps.length; i++) {
-      ctx.lineTo(face.ps[i][0], face.ps[i][1]);
-    }
-    ctx.closePath();
-    ctx.fillStyle = face.color;
-    ctx.fill();
-    ctx.strokeStyle = "#555";
-    ctx.lineWidth = 0.5;
-    ctx.stroke();
-  }
-
-  // Only draw wheels/trucks when the bottom of the deck faces the camera.
-  // Bottom face normal in local space is [0, 0, -1].
-  // After rotation: nz = -m[8]. If nz < 0 the bottom faces the camera.
-  const bottomFacesCamera = -m[8] < 0;
-
-  if (bottomFacesCamera) {
-    // Wheels: positioned along Y axis (length), offset on X (width) and Z (below deck)
-    const wheelPositions = [
-      [-hw - 0.02, -hl + 0.2, -hd - 0.04],
-      [ hw + 0.02, -hl + 0.2, -hd - 0.04],
-      [-hw - 0.02,  hl - 0.2, -hd - 0.04],
-      [ hw + 0.02,  hl - 0.2, -hd - 0.04],
-    ];
-    const wheelR = 0.055;
-    for (const wp of wheelPositions) {
-      const p = project(wp, m, cx, cy, scale, dist);
-      const r = (wheelR * scale) / (dist + 1);
-      ctx.beginPath();
-      ctx.arc(p[0], p[1], Math.max(r, 2), 0, Math.PI * 2);
-      ctx.fillStyle = "#f5f5dc";
-      ctx.fill();
-      ctx.strokeStyle = "#888";
-      ctx.lineWidth = 0.5;
-      ctx.stroke();
-    }
-
-    // Trucks (axles)
-    const truckPairs = [[0, 1], [2, 3]];
-    for (const [a, b] of truckPairs) {
-      const pa = project(wheelPositions[a], m, cx, cy, scale, dist);
-      const pb = project(wheelPositions[b], m, cx, cy, scale, dist);
-      ctx.beginPath();
-      ctx.moveTo(pa[0], pa[1]);
-      ctx.lineTo(pb[0], pb[1]);
-      ctx.strokeStyle = "#999";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-  }
-}
-
 function draw3D(ctx, W, H, q) {
-  if (state.animModel === "skateboard") {
-    drawSkateboard3D(ctx, W, H, q);
-  } else {
-    drawPhone3D(ctx, W, H, q);
-  }
+  drawPhone3D(ctx, W, H, q);
 }
 
 function initAnimation(samples) {
@@ -1431,19 +1310,6 @@ async function init() {
     renderDataset(false);
   });
 
-
-  // 3D model toggle
-  $("model-toggle").addEventListener("click", () => {
-    state.animModel = state.animModel === "phone" ? "skateboard" : "phone";
-    localStorage.setItem("flipphone_anim_model", state.animModel);
-    $("model-toggle-icon").textContent = state.animModel === "phone" ? "📱" : "🛹";
-    $("model-toggle-label").textContent = state.animModel === "phone" ? "Phone" : "Board";
-    // Re-render current frames
-    if (anim.orientations.length >= 2) renderAnimFrame();
-  });
-  // Init toggle label
-  $("model-toggle-icon").textContent = state.animModel === "phone" ? "📱" : "🛹";
-  $("model-toggle-label").textContent = state.animModel === "phone" ? "Phone" : "Board";
 
   // Settings button (re-open setup modal)
   $("btn-settings").addEventListener("click", () => openSetupModal());
