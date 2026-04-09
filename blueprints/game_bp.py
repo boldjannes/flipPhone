@@ -309,44 +309,24 @@ def save_game_recording():
 @require_game_session
 def poll():
     me = g.game_user['uid']
-    since = request.args.get('since', '')
     db = get_db()
 
-    # ── Pending games (invitations sent TO me) ──
-    if since:
-        pending_rows = db.execute(
-            '''SELECT * FROM games
-               WHERE opponent_id = ? AND status = 'invited'
-                 AND updated_at > ?
-               ORDER BY updated_at DESC''',
-            (me, since),
-        ).fetchall()
-    else:
-        pending_rows = db.execute(
-            '''SELECT * FROM games
-               WHERE opponent_id = ? AND status = 'invited'
-               ORDER BY updated_at DESC''',
-            (me,),
-        ).fetchall()
+    # ── Pending games (invitations sent TO me) — always return all ──
+    pending_rows = db.execute(
+        '''SELECT * FROM games
+           WHERE opponent_id = ? AND status = 'invited'
+           ORDER BY updated_at DESC''',
+        (me,),
+    ).fetchall()
 
-    # ── Active games (I'm either challenger or opponent) ──
-    if since:
-        active_rows = db.execute(
-            '''SELECT * FROM games
-               WHERE (challenger_id = ? OR opponent_id = ?)
-                 AND status = 'active'
-                 AND updated_at > ?
-               ORDER BY updated_at DESC''',
-            (me, me, since),
-        ).fetchall()
-    else:
-        active_rows = db.execute(
-            '''SELECT * FROM games
-               WHERE (challenger_id = ? OR opponent_id = ?)
-                 AND status = 'active'
-               ORDER BY updated_at DESC''',
-            (me, me),
-        ).fetchall()
+    # ── Active games (I'm either challenger or opponent) — always return all ──
+    active_rows = db.execute(
+        '''SELECT * FROM games
+           WHERE (challenger_id = ? OR opponent_id = ?)
+             AND status = 'active'
+           ORDER BY updated_at DESC''',
+        (me, me),
+    ).fetchall()
 
     # ── Friend requests count ──
     fr_count = db.execute(
