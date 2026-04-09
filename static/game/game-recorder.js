@@ -22,6 +22,29 @@
  *   const result = await recorder.matchLine(["kickflip", "heelflip"]);
  *   // → { success: true, completedTricks: 2 }
  */
+// Trick name→id mapping, loaded once from /game/api/tricks
+let _trickNameToId = null;
+
+async function _loadTrickMap() {
+  if (_trickNameToId) return;
+  try {
+    const resp = await fetch("/game/api/tricks");
+    if (resp.ok) {
+      const list = await resp.json();
+      _trickNameToId = {};
+      list.forEach((t) => {
+        _trickNameToId[t.name] = t.id;   // "Kickflip" → "kickflip"
+        _trickNameToId[t.id] = t.id;     // "kickflip" → "kickflip"
+      });
+    }
+  } catch { /* ignore */ }
+}
+
+function _normalizeTrick(raw) {
+  if (!_trickNameToId) return raw;
+  return _trickNameToId[raw] || raw;
+}
+
 class GameRecorder {
   constructor(options = {}) {
     this.confidenceThreshold = options.confidenceThreshold ?? 0.8;
@@ -31,6 +54,9 @@ class GameRecorder {
     this._sensorReady = false;
     this._permissionNeeded = false;
     this._abortController = null;
+
+    // Eagerly load trick mapping
+    _loadTrickMap();
   }
 
   // ──────────────────────────────────────────────
@@ -121,6 +147,9 @@ class GameRecorder {
     }
 
     const result = await resp.json();
+
+    // Normalize trick name from predict API ("Kickflip" → "kickflip")
+    result.trick = _normalizeTrick(result.trick);
 
     // Auto-save recording for data collection (fire-and-forget)
     this._saveRecording(samples, result.trick);
