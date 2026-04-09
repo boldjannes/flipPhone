@@ -119,7 +119,7 @@ async function apiFetch(path, options = {}) {
 }
 
 async function apiSaveRecording(rec) {
-  const resp = await apiFetch("/api/recordings", {
+  const resp = await apiFetch("/lab/api/recordings", {
     method: "POST",
     body: JSON.stringify(rec),
   });
@@ -131,7 +131,7 @@ async function apiSaveRecording(rec) {
 }
 
 async function apiLoadRecordings() {
-  const resp = await apiFetch("/api/recordings");
+  const resp = await apiFetch("/lab/api/recordings");
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err.error || `Server error ${resp.status}`);
@@ -140,7 +140,7 @@ async function apiLoadRecordings() {
 }
 
 async function apiDeleteRecording(id) {
-  const resp = await apiFetch(`/api/recordings/${encodeURIComponent(id)}`, {
+  const resp = await apiFetch(`/lab/api/recordings/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
   if (!resp.ok) {
@@ -151,7 +151,7 @@ async function apiDeleteRecording(id) {
 
 // Admin: create a key via API
 async function apiCreateKey(name) {
-  const resp = await apiFetch("/api/keys", {
+  const resp = await apiFetch("/admin/api/keys", {
     method: "POST",
     body: JSON.stringify({ name }),
   });
@@ -164,7 +164,7 @@ async function apiCreateKey(name) {
 
 // Admin: list keys via API
 async function apiListKeys() {
-  const resp = await apiFetch("/api/keys");
+  const resp = await apiFetch("/admin/api/keys");
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
     throw new Error(err.error || `Server error ${resp.status}`);
@@ -174,7 +174,7 @@ async function apiListKeys() {
 
 // Admin: revoke a key via API
 async function apiRevokeKey(keyId) {
-  const resp = await apiFetch(`/api/keys/${encodeURIComponent(keyId)}`, {
+  const resp = await apiFetch(`/admin/api/keys/${encodeURIComponent(keyId)}`, {
     method: "DELETE",
   });
   if (!resp.ok) {
@@ -185,13 +185,13 @@ async function apiRevokeKey(keyId) {
 
 // Reference recordings
 async function apiGetReferences() {
-  const resp = await apiFetch("/api/references");
+  const resp = await apiFetch("/lab/api/references");
   if (!resp.ok) return {};
   return resp.json();
 }
 
 async function apiSetReference(trick, recordingId) {
-  const resp = await apiFetch(`/api/references/${encodeURIComponent(trick)}`, {
+  const resp = await apiFetch(`/lab/api/references/${encodeURIComponent(trick)}`, {
     method: "PUT",
     body: JSON.stringify({ recording_id: recordingId }),
   });
@@ -203,7 +203,7 @@ async function apiSetReference(trick, recordingId) {
 }
 
 async function apiDeleteReference(trick) {
-  const resp = await apiFetch(`/api/references/${encodeURIComponent(trick)}`, {
+  const resp = await apiFetch(`/lab/api/references/${encodeURIComponent(trick)}`, {
     method: "DELETE",
   });
   if (!resp.ok) {
@@ -878,7 +878,7 @@ async function renderDataset(refetchData = true) {
 
     let stats;
     try {
-      const statsResp = await apiFetch("/api/stats");
+      const statsResp = await apiFetch("/lab/api/stats");
       if (!statsResp.ok) throw new Error("Could not load stats");
       stats = await statsResp.json();
     } catch (err) {
@@ -1223,7 +1223,7 @@ async function submitSetup() {
 
   try {
     // Test the credentials against /api/me
-    const resp = await fetch(serverUrl + "/api/me", {
+    const resp = await fetch(serverUrl + "/lab/api/me", {
       headers: { "X-API-Key": apiKey },
     });
     if (!resp.ok) {
@@ -1328,7 +1328,7 @@ async function init() {
     // Verify the stored config quietly
     try {
       const cfg = getConfig();
-      const resp = await fetch(cfg.serverUrl + "/api/me", {
+      const resp = await fetch(cfg.serverUrl + "/lab/api/me", {
         headers: { "X-API-Key": cfg.apiKey },
       });
       if (resp.ok) {
