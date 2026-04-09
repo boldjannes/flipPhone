@@ -29,8 +29,12 @@ PORT           Port to listen on when running without --port (default: 5000)
 """
 
 import argparse
+import logging
+import logging.handlers
 import os
 import sqlite3
+import time
+import traceback
 import urllib.error
 import urllib.request
 
@@ -39,6 +43,47 @@ from flask import Flask, jsonify, request
 from database import DB_PATH, close_db, generate_key, init_db, now_iso
 
 PREDICTION_API_URL = os.environ.get('PREDICTION_API_URL', 'http://localhost:8000')
+LOG_DIR = os.environ.get('FLIPPHONE_LOG_DIR', 'logs')
+LOG_LEVEL = os.environ.get('FLIPPHONE_LOG_LEVEL', 'INFO').upper()
+
+
+def _setup_logging(app):
+    """Configure rotating file + stderr logging."""
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    fmt = logging.Formatter(
+        '%(asctime)s  %(levelname)-5s  %(name)s  %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+
+    # Rotating file handler: 5 MB per file, keep 5 backups
+    fh = logging.handlers.RotatingFileHandler(
+        os.path.join(LOG_DIR, 'flipphone.log'),
+        maxBytes=5 * 1024 * 1024,
+        backupCount=5,
+        encoding='utf-8',
+    )
+    fh.setFormatter(fmt)
+    fh.setLevel(logging.DEBUG)
+
+    # Stderr handler
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    sh.setLevel(logging.WARNING)
+
+    # Root logger for the project
+    root = logging.getLogger('flipphone')
+    root.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+    root.addHandler(fh)
+    root.addHandler(sh)
+
+    # Flask app logger → same handlers
+    app.logger.handlers.clear()
+    app.logger.addHandler(fh)
+    app.logger.addHandler(sh)
+    app.logger.setLevel(getattr(logging, LOG_LEVEL, logging.INFO))
+
+    return root
 
 
 def create_app():
@@ -48,8 +93,31 @@ def create_app():
         template_folder='templates',
     )
 
+    log = _setup_logging(app)
+
     # Register teardown
     app.teardown_appcontext(close_db)
+
+    # ── Request logging ──
+    @app.before_request
+    def log_request():
+        request._start_time = time.time()
+
+    @app.after_request
+    def log_response(response):
+        duration = (time.time() - getattr(request, '_start_time', time.time())) * 1000
+        # Skip static files and OPTIONS from the log
+        if not request.path.startswith('/static') and request.method != 'OPTIONS':
+            log.info('%s %s %s %.0fms',
+                     request.method, request.path, response.status_code, duration)
+        return response
+
+    # ── Error logging ──
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        log.error('Unhandled exception on %s %s:\n%s',
+                  request.method, request.path, traceback.format_exc())
+        return jsonify({'error': 'Internal server error'}), 500
 
     # ── CORS ──
     @app.after_request
@@ -76,8 +144,10 @@ def create_app():
                 return app.response_class(response=body, status=resp.status, mimetype='application/json')
         except urllib.error.HTTPError as e:
             body = e.read()
+            log.warning('Predict proxy HTTP %d', e.code)
             return app.response_class(response=body, status=e.code, mimetype='application/json')
         except Exception as e:
+            log.error('Predict proxy error: %s', e)
             return jsonify({'error': f'Prediction service unavailable: {str(e)}'}), 502
 
     @app.route('/api/<path:_path>', methods=['OPTIONS'])
@@ -92,6 +162,8 @@ def create_app():
     app.register_blueprint(lab)
     app.register_blueprint(admin)
     app.register_blueprint(game)
+
+    log.info('FlipPhone app created, log level=%s', LOG_LEVEL)
 
     return app
 

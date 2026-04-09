@@ -4,6 +4,7 @@ Mounted at /.
 """
 
 import json
+import logging
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,8 @@ from flask import Blueprint, g, jsonify, render_template, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import get_db, now_iso
+
+log = logging.getLogger('flipphone.game')
 
 game = Blueprint('game', __name__)
 
@@ -95,6 +98,7 @@ def auth_register():
     db.commit()
 
     user = db.execute('SELECT * FROM game_users WHERE id = ?', (user_id,)).fetchone()
+    log.info('User registered: %s (id=%d)', username, user_id)
     return jsonify({'token': token, 'user': _user_response(user)}), 201
 
 
@@ -125,6 +129,7 @@ def auth_login():
     token = _create_session(db, user['id'])
     db.commit()
 
+    log.info('User logged in: %s (id=%d)', username, user['id'])
     return jsonify({'token': token, 'user': _user_response(user)})
 
 
@@ -469,6 +474,7 @@ def send_friend_request():
         (me, target_id, now_iso()),
     )
     db.commit()
+    log.info('Friend request: user %d -> user %d', me, target_id)
     return jsonify({'status': 'sent', 'friendship_id': cursor.lastrowid}), 201
 
 
@@ -492,6 +498,7 @@ def accept_friend():
 
     db.execute("UPDATE friendships SET status = 'accepted' WHERE id = ?", (fid,))
     db.commit()
+    log.info('Friend accepted: friendship %d by user %d', fid, me)
     return jsonify({'status': 'accepted'})
 
 
@@ -573,6 +580,7 @@ def challenge():
     db.commit()
 
     row = db.execute('SELECT * FROM games WHERE id = ?', (cursor.lastrowid,)).fetchone()
+    log.info('Game %d created: user %d challenged user %d', cursor.lastrowid, me, opponent_id)
     return jsonify(_game_state(row, db)), 201
 
 
@@ -687,6 +695,7 @@ def set_line(game_id):
         (game_id, me, json.dumps(tricks), now),
     )
     db.commit()
+    log.info('Game %d: user %d set line %s', game_id, me, tricks)
 
     row = db.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
     return jsonify(_game_state(row, db))
@@ -773,6 +782,8 @@ def submit_attempt(game_id):
         )
         db.execute('UPDATE game_users SET games_won = games_won + 1 WHERE id = ?', (winner,))
         db.execute('UPDATE game_users SET games_lost = games_lost + 1 WHERE id = ?', (loser,))
+        log.info('Game %d finished: winner=%d loser=%d (%s vs %s)',
+                 game_id, winner, loser, challenger_letters, opponent_letters)
     else:
         db.execute(
             '''UPDATE games SET challenger_letters = ?, opponent_letters = ?,
@@ -783,5 +794,7 @@ def submit_attempt(game_id):
         )
 
     db.commit()
+    log.info('Game %d submit-attempt: user=%d success=%s letters=(%s/%s)',
+             game_id, me, success, challenger_letters, opponent_letters)
     row = db.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
     return jsonify(_game_state(row, db))
