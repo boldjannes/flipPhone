@@ -27,6 +27,11 @@ def playground():
     return render_template('lab/playground.html')
 
 
+@lab.route('/embed')
+def embed():
+    return render_template('lab/embed.html')
+
+
 # ──────────────────────────────────────────────
 # CORS preflight for /lab/api/*
 # ──────────────────────────────────────────────
@@ -236,3 +241,63 @@ def delete_reference(trick):
     if result.rowcount == 0:
         return jsonify({'error': 'No reference for this trick'}), 404
     return jsonify({'status': 'removed'})
+
+
+# ──────────────────────────────────────────────
+# /lab/api/embeddings
+# ──────────────────────────────────────────────
+@lab.route('/api/embeddings')
+@require_api_key
+def get_embeddings():
+    """Return per-recording feature vectors (30 floats) for client-side PCA."""
+    db = get_db()
+    if g.key_row['is_admin']:
+        rows = db.execute(
+            '''SELECT r.id, r.trick, r.samples, r.duration_ms, r.sample_count,
+                      k.name AS collector
+               FROM recordings r
+               JOIN api_keys k ON r.key_id = k.id
+               ORDER BY r.created_at DESC'''
+        ).fetchall()
+    else:
+        rows = db.execute(
+            '''SELECT r.id, r.trick, r.samples, r.duration_ms, r.sample_count,
+                      k.name AS collector
+               FROM recordings r
+               JOIN api_keys k ON r.key_id = k.id
+               WHERE r.key_id = ?
+               ORDER BY r.created_at DESC''',
+            (g.key_row['id'],),
+        ).fetchall()
+
+    result = []
+    channels = ['ax', 'ay', 'az', 'gx', 'gy', 'gz']
+    for row in rows:
+        try:
+            samples = json.loads(row['samples'])
+        except Exception:
+            continue
+        if not samples:
+            continue
+
+        features = []
+        for ch in channels:
+            vals = [float(s.get(ch, 0)) for s in samples if isinstance(s, dict)]
+            if not vals:
+                features.extend([0.0] * 5)
+                continue
+            mean = sum(vals) / len(vals)
+            std = (sum((v - mean) ** 2 for v in vals) / max(len(vals) - 1, 1)) ** 0.5
+            mn, mx = min(vals), max(vals)
+            features.extend([mean, std, mn, mx, mx - mn])
+
+        result.append({
+            'id': row['id'],
+            'trick': row['trick'],
+            'collector': row['collector'],
+            'duration_ms': row['duration_ms'],
+            'sample_count': row['sample_count'],
+            'features': features,
+        })
+
+    return jsonify(result)
