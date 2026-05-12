@@ -88,6 +88,62 @@
     }
     #legend.hidden { display: none; }
 
+    /* Filter panel – top left, below toggle */
+    #filter-panel {
+      top: 44px;
+      left: 10px;
+      min-width: 150px;
+      max-height: calc(100% - 20px);
+      overflow-y: auto;
+    }
+    #filter-panel.hidden { display: none; }
+
+    #filter-toggle {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(20,20,20,0.92);
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #888;
+      font-size: 0.8rem;
+      padding: 5px 10px;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      z-index: 5;
+    }
+    #filter-toggle:hover { color: #f0f0f0; }
+
+    .filter-section { margin-bottom: 10px; }
+    .filter-section:last-child { margin-bottom: 0; }
+
+    .filter-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .filter-title:hover { color: #bbb; }
+
+    .filter-check-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: #ccc;
+      margin-bottom: 3px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .filter-check-item:last-child { margin-bottom: 0; }
+    .filter-check-item input { cursor: pointer; accent-color: #00e5ff; }
+
     .legend-title {
       font-size: 0.7rem;
       font-weight: 600;
@@ -272,6 +328,22 @@
 
       <div id="legend" class="embed-panel hidden">
         <div class="legend-title">Tricks</div>
+      </div>
+
+      <button id="filter-toggle" class="hidden">⚙ Filter</button>
+      <div id="filter-panel" class="embed-panel hidden">
+        <div class="filter-section">
+          <div class="filter-title" id="filter-tricks-title">
+            Tricks <span id="filter-tricks-count"></span>
+          </div>
+          <div id="filter-tricks"></div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-title" id="filter-collectors-title">
+            Collectors <span id="filter-collectors-count"></span>
+          </div>
+          <div id="filter-collectors"></div>
+        </div>
       </div>
 
       <div id="info-panel" class="embed-panel">

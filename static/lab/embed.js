@@ -11,9 +11,12 @@ const PALETTE = [
 const COLOR_SELECTED = 0xffffff;
 
 // ─── State ────────────────────────────────────
-let recordings = []; // [{id, trick, collector, duration_ms, sample_count, x, y, z}]
+let recordings = [];       // all recordings [{id, trick, collector, duration_ms, sample_count, x, y, z}]
+let visibleRecordings = []; // subset currently in the point cloud (after filter)
 let selected = new Set();
-let trickColorIdx = {}; // trick → palette index
+let trickColorIdx = {};    // trick → palette index
+let hiddenTricks = new Set();
+let hiddenCollectors = new Set();
 
 let threeScene, threeCamera, threeRenderer, threeControls, threePoints;
 let posArr, colorArr;
@@ -84,11 +87,14 @@ async function loadData() {
     z: d.z,
   }));
 
+  const collectors = [...new Set(data.map(d => d.collector))].sort();
+
   setStatus("");
   if (!threeRenderer) buildScene();
   else rebuildPoints();
 
   buildLegend(tricks);
+  buildFilters(tricks, collectors);
   updateInfoPanel();
   if (threeRenderer) threeRenderer.domElement.style.opacity = "1";
 }
@@ -128,14 +134,18 @@ function rebuildPoints() {
     threePoints.material.dispose();
   }
 
-  const n = recordings.length;
+  visibleRecordings = recordings.filter(
+    r => !hiddenTricks.has(r.trick) && !hiddenCollectors.has(r.collector)
+  );
+
+  const n = visibleRecordings.length;
   posArr   = new Float32Array(n * 3);
   colorArr = new Float32Array(n * 3);
 
   for (let i = 0; i < n; i++) {
-    posArr[i*3]   = recordings[i].x;
-    posArr[i*3+1] = recordings[i].y;
-    posArr[i*3+2] = recordings[i].z;
+    posArr[i*3]   = visibleRecordings[i].x;
+    posArr[i*3+1] = visibleRecordings[i].y;
+    posArr[i*3+2] = visibleRecordings[i].z;
     writeColor(i, false);
   }
 
@@ -158,15 +168,15 @@ function rebuildPoints() {
 function writeColor(i, isSelected) {
   const hex = isSelected
     ? COLOR_SELECTED
-    : (PALETTE[trickColorIdx[recordings[i].trick] ?? 0]);
+    : (PALETTE[trickColorIdx[visibleRecordings[i].trick] ?? 0]);
   colorArr[i*3]   = ((hex >> 16) & 0xff) / 255;
   colorArr[i*3+1] = ((hex >>  8) & 0xff) / 255;
   colorArr[i*3+2] = ( hex        & 0xff) / 255;
 }
 
 function refreshColors() {
-  for (let i = 0; i < recordings.length; i++) {
-    writeColor(i, selected.has(recordings[i].id));
+  for (let i = 0; i < visibleRecordings.length; i++) {
+    writeColor(i, selected.has(visibleRecordings[i].id));
   }
   if (threePoints) threePoints.geometry.attributes.color.needsUpdate = true;
 }
@@ -204,7 +214,7 @@ function onCanvasClick(e) {
     return;
   }
 
-  const rec = recordings[hits[0].index];
+  const rec = visibleRecordings[hits[0].index];
   if (e.shiftKey) {
     if (selected.has(rec.id)) selected.delete(rec.id);
     else selected.add(rec.id);
@@ -220,8 +230,6 @@ function onCanvasClick(e) {
 // ─── Legend ───────────────────────────────────
 function buildLegend(tricks) {
   const el = document.getElementById("legend");
-  const title = el.querySelector(".legend-title");
-  // Remove existing items but keep title
   [...el.querySelectorAll(".legend-item")].forEach(n => n.remove());
 
   for (const t of tricks) {
@@ -239,9 +247,51 @@ function buildLegend(tricks) {
 
 function selectByTrick(trick) {
   selected.clear();
-  for (const r of recordings) if (r.trick === trick) selected.add(r.id);
+  for (const r of visibleRecordings) if (r.trick === trick) selected.add(r.id);
   refreshColors();
   updateInfoPanel();
+}
+
+// ─── Filters ──────────────────────────────────
+function buildFilters(tricks, collectors) {
+  buildCheckGroup("filter-tricks", tricks, hiddenTricks, "filter-tricks-count");
+  buildCheckGroup("filter-collectors", collectors, hiddenCollectors, "filter-collectors-count");
+  document.getElementById("filter-toggle").classList.remove("hidden");
+}
+
+function buildCheckGroup(containerId, items, hiddenSet, countId) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = "";
+
+  const updateCount = () => {
+    const hidden = items.filter(i => hiddenSet.has(i)).length;
+    document.getElementById(countId).textContent = hidden ? `(${hidden} hidden)` : "";
+  };
+
+  for (const item of items) {
+    const id = `chk-${containerId}-${item}`;
+    const label = document.createElement("label");
+    label.className = "filter-check-item";
+    label.htmlFor = id;
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.checked = !hiddenSet.has(item);
+    chk.addEventListener("change", () => {
+      if (chk.checked) hiddenSet.delete(item);
+      else { hiddenSet.add(item); selected.clear(); }
+      updateCount();
+      rebuildPoints();
+      updateInfoPanel();
+    });
+
+    label.appendChild(chk);
+    label.appendChild(document.createTextNode(item));
+    el.appendChild(label);
+  }
+
+  updateCount();
 }
 
 // ─── Info panel ───────────────────────────────
@@ -315,6 +365,14 @@ function esc(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
+
+// ─── Filter toggle ────────────────────────────
+document.getElementById("filter-toggle").addEventListener("click", () => {
+  const panel = document.getElementById("filter-panel");
+  const btn   = document.getElementById("filter-toggle");
+  const open  = panel.classList.toggle("hidden");
+  btn.textContent = open ? "⚙ Filter" : "✕ Filter";
+});
 
 // ─── Auth wiring ──────────────────────────────
 document.getElementById("auth-submit").addEventListener("click", async () => {
