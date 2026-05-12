@@ -4,6 +4,9 @@ Mounted at /lab.
 """
 
 import json
+import os
+import urllib.error
+import urllib.request
 
 from flask import Blueprint, g, jsonify, render_template, request
 
@@ -12,6 +15,8 @@ from database import (
 )
 
 lab = Blueprint('lab', __name__, url_prefix='/lab')
+
+PREDICTION_API_URL = os.environ.get('PREDICTION_API_URL', 'http://localhost:8000')
 
 
 # ──────────────────────────────────────────────
@@ -249,7 +254,7 @@ def delete_reference(trick):
 @lab.route('/api/embeddings')
 @require_api_key
 def get_embeddings():
-    """Return per-recording feature vectors (30 floats) for client-side PCA."""
+    """Fetch feature vectors from the ML backend and merge with DB metadata."""
     db = get_db()
     if g.key_row['is_admin']:
         rows = db.execute(
@@ -270,8 +275,8 @@ def get_embeddings():
             (g.key_row['id'],),
         ).fetchall()
 
-    result = []
-    channels = ['ax', 'ay', 'az', 'gx', 'gy', 'gz']
+    meta = {}
+    payload_recordings = []
     for row in rows:
         try:
             samples = json.loads(row['samples'])
@@ -279,25 +284,39 @@ def get_embeddings():
             continue
         if not samples:
             continue
-
-        features = []
-        for ch in channels:
-            vals = [float(s.get(ch, 0)) for s in samples if isinstance(s, dict)]
-            if not vals:
-                features.extend([0.0] * 5)
-                continue
-            mean = sum(vals) / len(vals)
-            std = (sum((v - mean) ** 2 for v in vals) / max(len(vals) - 1, 1)) ** 0.5
-            mn, mx = min(vals), max(vals)
-            features.extend([mean, std, mn, mx, mx - mn])
-
-        result.append({
-            'id': row['id'],
+        meta[row['id']] = {
             'trick': row['trick'],
             'collector': row['collector'],
             'duration_ms': row['duration_ms'],
             'sample_count': row['sample_count'],
-            'features': features,
-        })
+        }
+        payload_recordings.append({'id': row['id'], 'samples': samples})
+
+    if not payload_recordings:
+        return jsonify([])
+
+    target = PREDICTION_API_URL.rstrip('/') + '/batch_embed'
+    body = json.dumps({'recordings': payload_recordings}).encode()
+    req = urllib.request.Request(
+        target,
+        data=body,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            embed_list = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return jsonify({'error': f'ML backend error: {e.code}'}), 502
+    except Exception as e:
+        return jsonify({'error': f'ML backend unavailable: {e}'}), 502
+
+    result = []
+    for entry in embed_list:
+        rec_id = entry.get('id')
+        features = entry.get('features')
+        if features is None or rec_id not in meta:
+            continue
+        result.append({'id': rec_id, 'features': features, **meta[rec_id]})
 
     return jsonify(result)
