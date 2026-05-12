@@ -47,63 +47,7 @@ function hideAuthModal() {
   document.getElementById("auth-modal").classList.add("hidden");
 }
 
-// ─── PCA (3 principal components) ────────────
-function pca3d(matrix) {
-  const n = matrix.length;
-  const p = matrix[0].length;
-  if (n < 2) return matrix.map((_, i) => [i * 0.5, 0, 0]);
-
-  // Z-score standardize each feature
-  const mean = Array(p).fill(0);
-  const std  = Array(p).fill(0);
-  for (const r of matrix) for (let j = 0; j < p; j++) mean[j] += r[j];
-  for (let j = 0; j < p; j++) mean[j] /= n;
-  for (const r of matrix) for (let j = 0; j < p; j++) std[j] += (r[j] - mean[j]) ** 2;
-  for (let j = 0; j < p; j++) std[j] = Math.sqrt(std[j] / n) || 1;
-
-  const X = matrix.map(r => r.map((v, j) => (v - mean[j]) / std[j]));
-
-  // Correlation matrix C[i][j] = Σ_k X[k][i]·X[k][j] / n
-  const C = Array.from({ length: p }, (_, i) =>
-    Array.from({ length: p }, (_, j) =>
-      X.reduce((s, r) => s + r[i] * r[j], 0) / n
-    )
-  );
-
-  // Power iteration + Gram-Schmidt deflation for top-3 eigenvectors
-  const dims = Math.min(3, p, n - 1);
-  const vecs = [];
-  for (let k = 0; k < dims; k++) {
-    // Deterministic but varied seed per component
-    let v = Array.from({ length: p }, (_, i) => Math.sin(i * 2.3 + k * 1.7));
-    const initNorm = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
-    v = v.map(x => x / initNorm);
-
-    for (let iter = 0; iter < 400; iter++) {
-      // w = C · v
-      const w = Array(p).fill(0);
-      for (let i = 0; i < p; i++) for (let j = 0; j < p; j++) w[i] += C[i][j] * v[j];
-      // Gram-Schmidt: remove components along already-found eigenvectors
-      for (const u of vecs) {
-        const dot = u.reduce((s, x, i) => s + x * w[i], 0);
-        for (let i = 0; i < p; i++) w[i] -= dot * u[i];
-      }
-      const norm = Math.sqrt(w.reduce((s, x) => s + x * x, 0));
-      if (norm < 1e-12) break;
-      v = w.map(x => x / norm);
-    }
-    vecs.push(v);
-  }
-
-  // Project standardised data onto eigenvectors
-  return X.map(r => {
-    const proj = vecs.map(v => v.reduce((s, x, j) => s + x * r[j], 0));
-    while (proj.length < 3) proj.push(0);
-    return proj;
-  });
-}
-
-// ─── Load + compute ───────────────────────────
+// ─── Load ─────────────────────────────────────
 async function loadData() {
   setStatus("Loading recordings…");
   document.getElementById("legend").classList.add("hidden");
@@ -124,27 +68,20 @@ async function loadData() {
     return;
   }
 
-  setStatus(`Computing PCA for ${data.length} recording${data.length > 1 ? "s" : ""}…`);
-
   // Assign palette colors per trick
   const tricks = [...new Set(data.map(d => d.trick))].sort();
   trickColorIdx = {};
   tricks.forEach((t, i) => { trickColorIdx[t] = i % PALETTE.length; });
 
-  // PCA
-  let coords;
-  try { coords = pca3d(data.map(d => d.features)); }
-  catch { coords = data.map((_, i) => [i * 0.1, 0, 0]); }
-
-  recordings = data.map((d, i) => ({
+  recordings = data.map(d => ({
     id: d.id,
     trick: d.trick,
     collector: d.collector,
     duration_ms: d.duration_ms,
     sample_count: d.sample_count,
-    x: coords[i][0],
-    y: coords[i][1],
-    z: coords[i][2],
+    x: d.x,
+    y: d.y,
+    z: d.z,
   }));
 
   setStatus("");

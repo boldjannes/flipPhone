@@ -314,9 +314,14 @@ def get_embeddings():
     result = []
     for entry in embed_list:
         rec_id = entry.get('id')
-        features = entry.get('features')
-        if features is None or rec_id not in meta:
+        if rec_id not in meta or entry.get('x') is None:
             continue
-        result.append({'id': rec_id, 'features': features, **meta[rec_id]})
+        result.append({
+            'id': rec_id,
+            'x': entry['x'],
+            'y': entry['y'],
+            'z': entry['z'],
+            **meta[rec_id],
+        })
 
     return jsonify(result)
