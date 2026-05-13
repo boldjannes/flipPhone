@@ -894,6 +894,184 @@
         40% { opacity: 1; transform: scale(1.2); }
       }
 
+      /* ── Toast ── */
+      #toast {
+        position: fixed;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
+        left: 50%;
+        transform: translateX(-50%) translateY(12px);
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 10px 20px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        opacity: 0;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        pointer-events: none;
+        z-index: 500;
+        white-space: nowrap;
+        max-width: calc(100vw - 40px);
+      }
+      #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* Sent invite card */
+      .home-sent-invite-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        opacity: 0.75;
+      }
+      .home-sent-invite-card .home-game-info { flex: 1; }
+      .home-sent-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--text-dim);
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 3px 8px;
+        white-space: nowrap;
+      }
+
+      /* Trick reference card (matcher screen) */
+      .gs-trick-ref {
+        background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+        border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+        border-radius: var(--radius);
+        padding: 16px;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .gs-trick-ref-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+      }
+      .gs-trick-ref-name {
+        font-size: 1.3rem;
+        font-weight: 800;
+        color: var(--text);
+      }
+      .gs-trick-ref-hint {
+        font-size: 0.78rem;
+        color: var(--text-dim);
+        line-height: 1.4;
+      }
+
+      /* Waiting screen line */
+      .gs-waiting-context {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px 16px;
+        width: 100%;
+        max-width: 320px;
+        text-align: center;
+      }
+      .gs-waiting-context-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--text-dim);
+        margin-bottom: 8px;
+      }
+      .gs-waiting-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+      }
+      .gs-waiting-pill {
+        padding: 5px 12px;
+        border-radius: 14px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+      }
+
+      /* Feedback flash after trick detection */
+      .gs-detect-flash {
+        border-radius: var(--radius);
+        padding: 14px 16px;
+        text-align: center;
+        animation: gsFlashIn 0.25s ease-out;
+      }
+      .gs-detect-flash.gs-detect-ok {
+        background: color-mix(in srgb, var(--success) 12%, var(--surface));
+        border: 1px solid var(--success);
+      }
+      .gs-detect-flash.gs-detect-fail {
+        background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+        border: 1px solid var(--danger);
+      }
+      .gs-detect-trick {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--text);
+      }
+      .gs-detect-conf {
+        font-size: 0.75rem;
+        color: var(--text-dim);
+        margin-top: 3px;
+      }
+      @keyframes gsFlashIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to   { opacity: 1; transform: scale(1); }
+      }
+
+      /* Pending requests banner */
+      .requests-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+        border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+        border-radius: var(--radius);
+        padding: 10px 14px;
+        margin-bottom: 8px;
+        cursor: pointer;
+      }
+      .requests-banner-count {
+        background: var(--danger);
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 800;
+        min-width: 22px;
+        height: 22px;
+        border-radius: 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .requests-banner-text {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--text);
+        flex: 1;
+      }
+      .requests-banner-arrow {
+        color: var(--text-dim);
+        font-size: 0.85rem;
+      }
+
       /* ── Friends Tab ── */
       .friends-section {
         padding: 16px 20px;
@@ -1099,17 +1277,38 @@
 
       <!-- Friends Tab -->
       <div id="tab-friends" class="app-tab-content">
+        <!-- Incoming requests banner (shown when count > 0) -->
+        <div class="friends-section" id="requests-banner-section" style="padding-bottom:0">
+          <div id="requests-banner" class="requests-banner hidden">
+            <span id="requests-banner-count" class="requests-banner-count">0</span>
+            <span class="requests-banner-text">Offene Freundschaftsanfragen</span>
+            <span class="requests-banner-arrow">›</span>
+          </div>
+        </div>
+
+        <!-- Search -->
         <div class="friends-section">
           <div class="friends-section-title">Nutzer suchen</div>
           <input id="friend-search-input" type="text" placeholder="Username oder Name..." />
           <div id="search-results"></div>
         </div>
         <div class="friends-divider"></div>
-        <div class="friends-section">
-          <div class="friends-section-title">Offene Anfragen</div>
+
+        <!-- Incoming requests (collapsible) -->
+        <div class="friends-section" id="requests-section">
+          <div class="friends-section-title">Anfragen erhalten</div>
           <div id="requests-list"></div>
         </div>
         <div class="friends-divider"></div>
+
+        <!-- Sent requests -->
+        <div class="friends-section" id="sent-requests-section">
+          <div class="friends-section-title">Anfragen gesendet</div>
+          <div id="sent-requests-list"></div>
+        </div>
+        <div class="friends-divider"></div>
+
+        <!-- Friends list -->
         <div class="friends-section">
           <div class="friends-section-title">Freunde</div>
           <div id="friends-list"></div>
@@ -1166,6 +1365,8 @@
       </div>
     </div>
 
+    <div id="toast"></div>
+
     <script src="/static/shared/sensor.js"></script>
     <script src="/static/game/auth.js"></script>
     <script src="/static/game/friends.js"></script>
@@ -1175,6 +1376,16 @@
     <script src="/static/game/notifications.js"></script>
     <script src="/static/game/poller.js"></script>
     <script>
+      // ── Toast ──
+      let _toastTimer = null;
+      function showToast(msg, duration = 2800) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        clearTimeout(_toastTimer);
+        _toastTimer = setTimeout(() => t.classList.remove("show"), duration);
+      }
+
       // ── Navigate to game screen ──
       function navigateToGame(gameId) {
         openGame(gameId);

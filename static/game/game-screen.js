@@ -13,6 +13,20 @@
  */
 
 // ──────────────────────────────────────────────
+// Trick reference hints (matcher screen)
+// ──────────────────────────────────────────────
+const TRICK_HINTS = {
+  kickflip:       "Fuß an der Nose-Seite. Kick nach vorne-außen — Board dreht über die Längsachse.",
+  heelflip:       "Ferse schiebt nach vorne-innen — Board dreht zur Heel-Seite (entgegengesetzt zum Kickflip).",
+  fs_shuvit:      "Kein Flip. Board dreht 180° backside (Nose nach vorne). Frontside Pop.",
+  fs_360_shuvit:  "Kein Flip. Board dreht 360° backside. Voller Umlauf.",
+  bs_shuvit:      "Kein Flip. Board dreht 180° frontside (Nose nach hinten). Backside Pop.",
+  bs_360_shuvit:  "Kein Flip. Board dreht 360° frontside. Voller Umlauf.",
+  treflip:        "360° Backside Shuvit + Kickflip gleichzeitig — auch Tre-Flip oder 360 Flip.",
+  late_kickflip:  "Kickflip erst nach dem Absprung — spät, kurz vor der Landung.",
+};
+
+// ──────────────────────────────────────────────
 // State
 // ──────────────────────────────────────────────
 let _gsGameId = null;
@@ -288,21 +302,22 @@ async function _gsSetterToggleRecord() {
 
       if (result.confidence >= _gsRecorder.confidenceThreshold) {
         _gsLine.push(result.trick);
-        if (status) status.textContent = `${result.trick.replace(/_/g, " ")} erkannt! (${(result.confidence * 100).toFixed(0)}%)`;
+        _gsShowDetectFlash(result.trick, result.confidence, true);
 
         if (_gsLine.length >= 3) {
-          // Auto-submit at max
           await _gsSetterSubmit();
           return;
         }
 
-        // Re-render
-        _gsRenderSetter(_gsGame);
+        setTimeout(() => _gsRenderSetter(_gsGame), 700);
       } else {
-        if (status) status.textContent = `Nicht sicher genug (${(result.confidence * 100).toFixed(0)}%). Nochmal versuchen!`;
-        btn.textContent = "Trick aufnehmen";
-        btn.disabled = false;
-        btn.classList.remove("gs-btn-recording");
+        _gsShowDetectFlash(result.trick, result.confidence, false);
+        if (status) status.textContent = "Nicht erkannt – nochmal versuchen!";
+        setTimeout(() => {
+          btn.textContent = "Trick aufnehmen";
+          btn.disabled = false;
+          btn.classList.remove("gs-btn-recording");
+        }, 700);
       }
     } catch (err) {
       if (status) status.textContent = "Fehler: " + err.message;
@@ -396,10 +411,14 @@ function _gsRenderMatcher(game) {
     c.appendChild(banner);
   }
 
+  // Trick reference card for current trick
+  if (line[_gsMatchIndex]) {
+    c.appendChild(_gsTrickRef(line[_gsMatchIndex]));
+  }
+
   // Status
   const status = _gs("div", "gs-status");
   status.id = "gs-status";
-  if (line[0]) status.textContent = `Zeige: ${line[0].replace(/_/g, " ")}`;
   c.appendChild(status);
 
   // Record button
@@ -410,6 +429,17 @@ function _gsRenderMatcher(game) {
   recordBtn.addEventListener("click", () => _gsMatcherToggleRecord());
   actions.appendChild(recordBtn);
   c.appendChild(actions);
+}
+
+function _gsTrickRef(trickId) {
+  const name = trickId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const hint = TRICK_HINTS[trickId] || "";
+  const card = _gs("div", "gs-trick-ref");
+  card.id = "gs-trick-ref";
+  card.appendChild(_gs("div", "gs-trick-ref-label", "Aktueller Trick"));
+  card.appendChild(_gs("div", "gs-trick-ref-name", name));
+  if (hint) card.appendChild(_gs("div", "gs-trick-ref-hint", hint));
+  return card;
 }
 
 async function _gsMatcherToggleRecord() {
@@ -447,31 +477,33 @@ async function _gsMatcherToggleRecord() {
         result.confidence >= _gsRecorder.confidenceThreshold;
 
       if (matched) {
-        // Update pill to done
         _gsMatchIndex++;
         _gsUpdateMatchPills(line);
+        _gsShowDetectFlash(result.trick, result.confidence, true);
 
         if (_gsMatchIndex >= line.length) {
-          // All matched!
-          if (status) status.textContent = "Alle Tricks geschafft!";
           btn.remove();
-          await _gsMatcherSubmit(true);
+          setTimeout(() => _gsMatcherSubmit(true), 800);
           return;
         }
 
-        if (status) status.textContent = `Weiter: ${line[_gsMatchIndex].replace(/_/g, " ")}`;
-        btn.textContent = "Trick aufnehmen";
-        btn.disabled = false;
-        btn.classList.remove("gs-btn-recording");
+        // Update trick reference for next trick
+        setTimeout(() => {
+          const refCard = document.getElementById("gs-trick-ref");
+          if (refCard && line[_gsMatchIndex]) {
+            const newRef = _gsTrickRef(line[_gsMatchIndex]);
+            refCard.replaceWith(newRef);
+          }
+          btn.textContent = "Trick aufnehmen";
+          btn.disabled = false;
+          btn.classList.remove("gs-btn-recording");
+        }, 800);
       } else {
-        // Failed
         _gsMatchFailed = true;
         _gsUpdateMatchPills(line, _gsMatchIndex);
-
-        const detected = result.trick.replace(/_/g, " ");
-        if (status) status.textContent = `${detected} erkannt statt ${required.replace(/_/g, " ")} \u2013 nicht geschafft!`;
+        _gsShowDetectFlash(result.trick, result.confidence, false);
         btn.remove();
-        await _gsMatcherSubmit(false);
+        setTimeout(() => _gsMatcherSubmit(false), 800);
       }
     } catch (err) {
       if (status) status.textContent = "Fehler: " + err.message;
@@ -605,21 +637,22 @@ function _gsRenderWaiting(game) {
   const c = GS.content();
   c.innerHTML = "";
 
-  // Back button
   c.appendChild(_gsBackBtn());
-
-  // SKATE bar
   c.appendChild(_gsSkateBar(game));
 
   const opp = _gsOpponent(game);
   const wrap = _gs("div", "gs-waiting-wrap");
 
   const avatar = _gs("div", "gs-waiting-avatar");
-  const name = opp.display_name || opp.username;
-  avatar.textContent = name.slice(0, 2).toUpperCase();
+  avatar.textContent = (opp.display_name || opp.username).slice(0, 2).toUpperCase();
   wrap.appendChild(avatar);
 
-  wrap.appendChild(_gs("div", "gs-waiting-text", `@${opp.username} macht gerade seinen Zug...`));
+  // Context-aware copy
+  const isMatcher = game.current_role === "matcher";
+  const waitText = isMatcher
+    ? `@${opp.username} versucht deine Line nachzumachen...`
+    : `@${opp.username} legt eine neue Line fest...`;
+  wrap.appendChild(_gs("div", "gs-waiting-text", waitText));
 
   const pulse = _gs("div", "gs-waiting-pulse");
   for (let i = 0; i < 3; i++) {
@@ -628,6 +661,18 @@ function _gsRenderWaiting(game) {
     pulse.appendChild(dot);
   }
   wrap.appendChild(pulse);
+
+  // Show current line if opponent is matching it
+  if (isMatcher && game.current_line && game.current_line.length) {
+    const ctx = _gs("div", "gs-waiting-context");
+    ctx.appendChild(_gs("div", "gs-waiting-context-label", "Deine Line"));
+    const pillRow = _gs("div", "gs-waiting-pills");
+    game.current_line.forEach((trick) => {
+      pillRow.appendChild(_gs("span", "gs-waiting-pill", trick.replace(/_/g, " ")));
+    });
+    ctx.appendChild(pillRow);
+    wrap.appendChild(ctx);
+  }
 
   c.appendChild(wrap);
 
@@ -681,6 +726,24 @@ function _gsRenderFinished(game) {
   wrap.appendChild(okBtn);
 
   c.appendChild(wrap);
+}
+
+// ──────────────────────────────────────────────
+// Detection feedback flash
+// ──────────────────────────────────────────────
+function _gsShowDetectFlash(trick, confidence, ok) {
+  const status = document.getElementById("gs-status");
+  if (!status) return;
+
+  const name = trick.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const pct  = (confidence * 100).toFixed(0);
+  const cls  = ok ? "gs-detect-ok" : "gs-detect-fail";
+
+  status.innerHTML = "";
+  const flash = _gs("div", `gs-detect-flash ${cls}`);
+  flash.appendChild(_gs("div", "gs-detect-trick", ok ? `✓ ${name}` : `✗ ${name}`));
+  flash.appendChild(_gs("div", "gs-detect-conf", `${pct}% Konfidenz`));
+  status.appendChild(flash);
 }
 
 // ──────────────────────────────────────────────

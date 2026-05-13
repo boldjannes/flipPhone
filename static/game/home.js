@@ -193,6 +193,25 @@ function renderInvitationCard(game) {
 }
 
 // ──────────────────────────────────────────────
+// Sent invitation card
+// ──────────────────────────────────────────────
+
+function renderSentInvitationCard(game) {
+  const opp = game.opponent;
+  const card = _h("div", "home-sent-invite-card");
+
+  card.appendChild(_avatar(opp, "md"));
+
+  const info = _h("div", "home-game-info");
+  info.appendChild(_h("div", "home-game-opponent", opp.display_name || opp.username));
+  info.appendChild(_h("div", "friend-meta", "Einladung gesendet · wartet auf Antwort"));
+  card.appendChild(info);
+
+  card.appendChild(_h("span", "home-sent-badge", "Ausstehend"));
+  return card;
+}
+
+// ──────────────────────────────────────────────
 // Friend scroller (challenge)
 // ──────────────────────────────────────────────
 
@@ -260,10 +279,10 @@ function renderHome(data, friends) {
   const myTurnGames = [];
   const waitingGames = [];
   const invitations = [];
+  const sentInvitations = [];
 
-  if (data.pending_games) {
-    data.pending_games.forEach((g) => invitations.push(g));
-  }
+  if (data.pending_games) data.pending_games.forEach((g) => invitations.push(g));
+  if (data.sent_invitations) data.sent_invitations.forEach((g) => sentInvitations.push(g));
 
   if (data.active_games) {
     data.active_games.forEach((g) => {
@@ -272,23 +291,7 @@ function renderHome(data, friends) {
     });
   }
 
-  // 1. My turn
-  if (myTurnGames.length) {
-    const sec = _h("div", "home-section");
-    sec.appendChild(_h("div", "home-section-title", "Du bist dran"));
-    myTurnGames.forEach((g) => sec.appendChild(renderGameCard(g, true)));
-    container.appendChild(sec);
-  }
-
-  // 2. Waiting
-  if (waitingGames.length) {
-    const sec = _h("div", "home-section");
-    sec.appendChild(_h("div", "home-section-title", "Warten auf..."));
-    waitingGames.forEach((g) => sec.appendChild(renderGameCard(g, false)));
-    container.appendChild(sec);
-  }
-
-  // 3. Invitations
+  // 1. Incoming invitations (most urgent — action required)
   if (invitations.length) {
     const sec = _h("div", "home-section");
     sec.appendChild(_h("div", "home-section-title", "Einladungen"));
@@ -296,7 +299,31 @@ function renderHome(data, friends) {
     container.appendChild(sec);
   }
 
-  // 4. Challenge friends
+  // 2. My turn
+  if (myTurnGames.length) {
+    const sec = _h("div", "home-section");
+    sec.appendChild(_h("div", "home-section-title", "Du bist dran"));
+    myTurnGames.forEach((g) => sec.appendChild(renderGameCard(g, true)));
+    container.appendChild(sec);
+  }
+
+  // 3. Waiting for opponent
+  if (waitingGames.length) {
+    const sec = _h("div", "home-section");
+    sec.appendChild(_h("div", "home-section-title", "Warten auf Gegner"));
+    waitingGames.forEach((g) => sec.appendChild(renderGameCard(g, false)));
+    container.appendChild(sec);
+  }
+
+  // 4. Sent invitations (waiting for accept)
+  if (sentInvitations.length) {
+    const sec = _h("div", "home-section");
+    sec.appendChild(_h("div", "home-section-title", "Gesendete Einladungen"));
+    sentInvitations.forEach((g) => sec.appendChild(renderSentInvitationCard(g)));
+    container.appendChild(sec);
+  }
+
+  // 5. Challenge friends scroller
   if (friends && friends.length) {
     const sec = _h("div", "home-section");
     sec.appendChild(_h("div", "home-section-title", "Freunde herausfordern"));
@@ -305,7 +332,9 @@ function renderHome(data, friends) {
   }
 
   // Empty state
-  if (!myTurnGames.length && !waitingGames.length && !invitations.length && (!friends || !friends.length)) {
+  const hasAnything = myTurnGames.length || waitingGames.length || invitations.length ||
+    sentInvitations.length || (friends && friends.length);
+  if (!hasAnything) {
     const empty = _h("div", "home-empty");
     empty.appendChild(_h("div", "home-empty-icon", "\uD83D\uDEF9"));
     empty.appendChild(_h("div", "home-empty-text", "Noch keine Spiele"));

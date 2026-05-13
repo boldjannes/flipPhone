@@ -1,6 +1,7 @@
 "use strict";
 
 const FRIENDS_API = "/game/api";
+const SENT_REQS_KEY = "fp_sent_requests"; // localStorage: Set<userId> of pending sent requests
 
 // ──────────────────────────────────────────────
 // API helpers
@@ -28,9 +29,13 @@ async function getFriends() {
 }
 
 async function getRequests() {
-  const resp = await fetch(`${FRIENDS_API}/friends/requests`, {
-    headers: _headers(),
-  });
+  const resp = await fetch(`${FRIENDS_API}/friends/requests`, { headers: _headers() });
+  if (!resp.ok) return [];
+  return resp.json();
+}
+
+async function getSentRequests() {
+  const resp = await fetch(`${FRIENDS_API}/friends/sent`, { headers: _headers() });
   if (!resp.ok) return [];
   return resp.json();
 }
@@ -41,7 +46,7 @@ async function sendRequest(userId) {
     headers: _headers(),
     body: JSON.stringify({ user_id: userId }),
   });
-  return resp.json();
+  return resp;
 }
 
 async function acceptRequest(friendshipId) {
@@ -71,6 +76,26 @@ async function removeFriend(friendshipId) {
 }
 
 // ──────────────────────────────────────────────
+// Persistent sent-request tracking
+// ──────────────────────────────────────────────
+function _loadSentSet() {
+  try { return new Set(JSON.parse(localStorage.getItem(SENT_REQS_KEY)) || []); }
+  catch { return new Set(); }
+}
+function _saveSentSet(s) {
+  localStorage.setItem(SENT_REQS_KEY, JSON.stringify([...s]));
+}
+function _markSent(userId) {
+  const s = _loadSentSet(); s.add(String(userId)); _saveSentSet(s);
+}
+function _unmarkSent(userId) {
+  const s = _loadSentSet(); s.delete(String(userId)); _saveSentSet(s);
+}
+function _isSent(userId) {
+  return _loadSentSet().has(String(userId));
+}
+
+// ──────────────────────────────────────────────
 // UI helpers
 // ──────────────────────────────────────────────
 function _initials(user) {
@@ -82,7 +107,7 @@ function _statsLine(user) {
   const parts = [];
   if (user.tricks_landed) parts.push(`${user.tricks_landed} tricks`);
   if (user.games_won) parts.push(`${user.games_won} W`);
-  return parts.length ? parts.join(" \u00b7 ") : "New player";
+  return parts.length ? parts.join(" · ") : "New player";
 }
 
 function _el(tag, cls, text) {
@@ -96,7 +121,6 @@ function _el(tag, cls, text) {
 // Search
 // ──────────────────────────────────────────────
 let searchTimer = null;
-const sentRequests = new Set();
 
 function setupSearch() {
   const input = document.getElementById("friend-search-input");
@@ -106,10 +130,7 @@ function setupSearch() {
   input.addEventListener("input", () => {
     const q = input.value.trim();
     clearTimeout(searchTimer);
-    if (q.length < 2) {
-      list.innerHTML = "";
-      return;
-    }
+    if (q.length < 2) { list.innerHTML = ""; return; }
     searchTimer = setTimeout(async () => {
       const users = await searchUsers(q);
       if (input.value.trim() !== q) return;
@@ -121,57 +142,71 @@ function setupSearch() {
 function renderSearchResults(users, container) {
   container.innerHTML = "";
   if (!users.length) {
-    container.appendChild(_el("div", "friends-empty", "No users found"));
+    container.appendChild(_el("div", "friends-empty", "Keine Nutzer gefunden"));
     return;
   }
   users.forEach((u) => {
     const row = _el("div", "friend-row");
 
-    const avatar = _el("div", "avatar-circle", _initials(u));
-    row.appendChild(avatar);
+    row.appendChild(_el("div", "avatar-circle", _initials(u)));
 
     const info = _el("div", "friend-info");
     info.appendChild(_el("div", "friend-name", u.display_name || u.username));
-    const meta = _el("div", "friend-meta");
-    meta.textContent = `@${u.username}`;
-    const stats = ` \u00b7 ${_statsLine(u)}`;
-    meta.textContent += stats;
-    info.appendChild(meta);
+    info.appendChild(_el("div", "friend-meta", `@${u.username} · ${_statsLine(u)}`));
     row.appendChild(info);
 
     const btn = _el("button", "friend-action-btn accent-btn");
-    if (sentRequests.has(u.id)) {
-      btn.textContent = "Gesendet";
+    const alreadySent = _isSent(u.id);
+    if (alreadySent) {
+      btn.textContent = "Gesendet ✓";
       btn.disabled = true;
       btn.classList.add("disabled");
     } else {
-      btn.textContent = "Anfrage";
+      btn.textContent = "Anfrage senden";
       btn.addEventListener("click", async () => {
-        btn.textContent = "Gesendet";
+        btn.textContent = "...";
         btn.disabled = true;
-        btn.classList.add("disabled");
-        sentRequests.add(u.id);
-        await sendRequest(u.id);
+        const resp = await sendRequest(u.id);
+        if (resp.ok) {
+          _markSent(u.id);
+          btn.textContent = "Gesendet ✓";
+          btn.classList.add("disabled");
+          loadSentRequests();
+          if (typeof showToast !== "undefined") showToast("Freundschaftsanfrage gesendet!");
+        } else {
+          btn.textContent = "Anfrage senden";
+          btn.disabled = false;
+        }
       });
     }
     row.appendChild(btn);
-
     container.appendChild(row);
   });
 }
 
 // ──────────────────────────────────────────────
-// Requests
+// Incoming requests
 // ──────────────────────────────────────────────
 async function loadRequests() {
   const reqs = await getRequests();
+  _renderRequests(reqs);
+}
+
+function _renderRequests(reqs) {
   const badge = document.getElementById("requests-badge");
-  const list = document.getElementById("requests-list");
+  const list  = document.getElementById("requests-list");
+  const banner = document.getElementById("requests-banner");
+  const bannerCount = document.getElementById("requests-banner-count");
   if (!list) return;
 
+  // Update nav badge + top banner
   if (badge) {
     badge.textContent = reqs.length || "";
     badge.classList.toggle("hidden", reqs.length === 0);
+  }
+  if (banner && bannerCount) {
+    bannerCount.textContent = reqs.length;
+    banner.classList.toggle("hidden", reqs.length === 0);
   }
 
   list.innerHTML = "";
@@ -182,43 +217,80 @@ async function loadRequests() {
 
   reqs.forEach((r) => {
     const row = _el("div", "friend-row request-row");
-
-    const avatar = _el("div", "avatar-circle", _initials(r.from_user));
-    row.appendChild(avatar);
+    row.appendChild(_el("div", "avatar-circle", _initials(r.from_user)));
 
     const info = _el("div", "friend-info");
-    info.appendChild(
-      _el("div", "friend-name", r.from_user.display_name || r.from_user.username)
-    );
+    info.appendChild(_el("div", "friend-name", r.from_user.display_name || r.from_user.username));
     info.appendChild(_el("div", "friend-meta", `@${r.from_user.username}`));
     row.appendChild(info);
 
     const actions = _el("div", "request-actions");
 
-    const acceptBtn = _el("button", "friend-action-btn accept-btn", "Annehmen");
+    const acceptBtn = _el("button", "friend-action-btn accept-btn", "✓ Annehmen");
     acceptBtn.addEventListener("click", async () => {
-      row.classList.add("fade-out");
+      acceptBtn.disabled = true;
+      declineBtn.disabled = true;
       await acceptRequest(r.friendship_id);
+      row.classList.add("fade-out");
       setTimeout(() => {
         row.remove();
-        loadFriends();
+        _unmarkSent(r.from_user.id);
         loadRequests();
+        loadFriends();
+        if (typeof refreshHomeFriends !== "undefined") refreshHomeFriends();
+        if (typeof showToast !== "undefined") showToast(`${r.from_user.display_name || r.from_user.username} ist jetzt dein Freund!`);
       }, 300);
     });
     actions.appendChild(acceptBtn);
 
     const declineBtn = _el("button", "friend-action-btn decline-btn", "Ablehnen");
     declineBtn.addEventListener("click", async () => {
-      row.classList.add("fade-out");
+      declineBtn.disabled = true;
+      acceptBtn.disabled = true;
       await declineRequest(r.friendship_id);
-      setTimeout(() => {
-        row.remove();
-        loadRequests();
-      }, 300);
+      row.classList.add("fade-out");
+      setTimeout(() => { row.remove(); loadRequests(); }, 300);
     });
     actions.appendChild(declineBtn);
 
     row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+// ──────────────────────────────────────────────
+// Sent requests
+// ──────────────────────────────────────────────
+async function loadSentRequests() {
+  const sent = await getSentRequests();
+  const list = document.getElementById("sent-requests-list");
+  const section = document.getElementById("sent-requests-section");
+  if (!list) return;
+
+  // Sync localStorage with what server knows
+  // (server may have moved them to accepted/declined)
+  const serverPendingIds = new Set(sent.map(s => String(s.to_user.id)));
+  const localSent = _loadSentSet();
+  localSent.forEach(id => { if (!serverPendingIds.has(id)) localSent.delete(id); });
+  _saveSentSet(localSent);
+
+  if (section) section.style.display = sent.length ? "" : "none";
+
+  list.innerHTML = "";
+  if (!sent.length) return;
+
+  sent.forEach((s) => {
+    const row = _el("div", "friend-row");
+    row.appendChild(_el("div", "avatar-circle", _initials(s.to_user)));
+
+    const info = _el("div", "friend-info");
+    info.appendChild(_el("div", "friend-name", s.to_user.display_name || s.to_user.username));
+    info.appendChild(_el("div", "friend-meta", `@${s.to_user.username} · Anfrage ausstehend`));
+    row.appendChild(info);
+
+    const badge = _el("span", "home-sent-badge", "Ausstehend");
+    row.appendChild(badge);
+
     list.appendChild(row);
   });
 }
@@ -233,40 +305,28 @@ async function loadFriends() {
 
   list.innerHTML = "";
   if (!friends.length) {
-    list.appendChild(
-      _el("div", "friends-empty", "Noch keine Freunde. Suche oben nach Nutzern!")
-    );
+    list.appendChild(_el("div", "friends-empty", "Noch keine Freunde. Suche oben nach Nutzern!"));
     return;
   }
 
   friends
-    .sort((a, b) =>
-      (a.user.username).localeCompare(b.user.username)
-    )
+    .sort((a, b) => (a.user.username).localeCompare(b.user.username))
     .forEach((f) => {
       const row = _el("div", "friend-row");
-
-      const avatar = _el("div", "avatar-circle", _initials(f.user));
-      row.appendChild(avatar);
+      row.appendChild(_el("div", "avatar-circle", _initials(f.user)));
 
       const info = _el("div", "friend-info");
-      info.appendChild(
-        _el("div", "friend-name", f.user.display_name || f.user.username)
-      );
-      const meta = _el("div", "friend-meta");
-      meta.textContent = `@${f.user.username} \u00b7 ${_statsLine(f.user)}`;
-      info.appendChild(meta);
+      info.appendChild(_el("div", "friend-name", f.user.display_name || f.user.username));
+      info.appendChild(_el("div", "friend-meta", `@${f.user.username} · ${_statsLine(f.user)}`));
       row.appendChild(info);
 
       const actions = _el("div", "request-actions");
 
-      const challengeBtn = _el("button", "friend-action-btn accent-btn", "Herausfordern");
-      challengeBtn.addEventListener("click", () => {
-        startChallenge(f.user.id);
-      });
+      const challengeBtn = _el("button", "friend-action-btn accent-btn", "Challenge");
+      challengeBtn.addEventListener("click", () => startChallenge(f.user.id, f.user.display_name || f.user.username));
       actions.appendChild(challengeBtn);
 
-      const removeBtn = _el("button", "friend-action-btn decline-btn", "\u00d7");
+      const removeBtn = _el("button", "friend-action-btn decline-btn", "×");
       removeBtn.title = "Entfernen";
       removeBtn.addEventListener("click", async () => {
         if (!confirm(`${f.user.display_name || f.user.username} entfernen?`)) return;
@@ -281,9 +341,28 @@ async function loadFriends() {
     });
 }
 
-// Stub for Phase 3
-function startChallenge(userId) {
-  console.log("startChallenge", userId);
+// ──────────────────────────────────────────────
+// Challenge a friend
+// ──────────────────────────────────────────────
+async function startChallenge(userId, displayName) {
+  try {
+    const resp = await fetch("/game/api/games/challenge", {
+      method: "POST",
+      headers: _headers(),
+      body: JSON.stringify({ opponent_id: userId }),
+    });
+    if (resp.ok) {
+      if (typeof showToast !== "undefined") showToast(`Herausforderung an ${displayName} gesendet!`);
+      // Switch to home tab so user sees the sent invitation
+      if (typeof switchNav !== "undefined") switchNav("home");
+      if (typeof gamePoller !== "undefined" && gamePoller) gamePoller.poll();
+    } else {
+      const err = await resp.json().catch(() => ({}));
+      if (typeof showToast !== "undefined") showToast(err.error || "Fehler beim Senden");
+    }
+  } catch {
+    if (typeof showToast !== "undefined") showToast("Verbindungsfehler");
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -294,15 +373,19 @@ let requestsPollTimer = null;
 function initFriends() {
   setupSearch();
   loadRequests();
+  loadSentRequests();
   loadFriends();
 
+  // Scroll to requests banner if there are incoming requests
+  const banner = document.getElementById("requests-banner");
+  if (banner && !banner.classList.contains("hidden")) {
+    banner.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   if (requestsPollTimer) clearInterval(requestsPollTimer);
-  requestsPollTimer = setInterval(loadRequests, 30000);
+  requestsPollTimer = setInterval(() => { loadRequests(); loadSentRequests(); }, 30000);
 }
 
 function destroyFriends() {
-  if (requestsPollTimer) {
-    clearInterval(requestsPollTimer);
-    requestsPollTimer = null;
-  }
+  if (requestsPollTimer) { clearInterval(requestsPollTimer); requestsPollTimer = null; }
 }

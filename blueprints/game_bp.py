@@ -309,6 +309,14 @@ def poll():
         (me,),
     ).fetchall()
 
+    # ── Invitations I sent (I'm challenger, waiting for opponent) ──
+    sent_inv_rows = db.execute(
+        '''SELECT * FROM games
+           WHERE challenger_id = ? AND status = 'invited'
+           ORDER BY updated_at DESC''',
+        (me,),
+    ).fetchall()
+
     # ── Active games (I'm either challenger or opponent) — always return all ──
     active_rows = db.execute(
         '''SELECT * FROM games
@@ -338,6 +346,7 @@ def poll():
 
     return jsonify({
         'pending_games': [_game_state(r, db) for r in pending_rows],
+        'sent_invitations': [_game_state(r, db) for r in sent_inv_rows],
         'active_games': [_game_state(r, db) for r in active_rows],
         'friend_requests_count': fr_count,
         'my_turn_count': my_turn,
@@ -424,6 +433,27 @@ def friend_requests():
     return jsonify([{
         'friendship_id': r['friendship_id'],
         'from_user': _user_profile(r),
+        'created_at': r['created_at'],
+    } for r in rows])
+
+
+@game.route('/game/api/friends/sent')
+@require_game_session
+def sent_friend_requests():
+    me = g.game_user['uid']
+    db = get_db()
+    rows = db.execute(
+        '''SELECT f.id AS friendship_id, f.created_at,
+                  u.id, u.username, u.display_name, u.tricks_landed, u.games_won
+           FROM friendships f
+           JOIN game_users u ON u.id = f.addressee_id
+           WHERE f.requester_id = ? AND f.status = 'pending' ''',
+        (me,),
+    ).fetchall()
+
+    return jsonify([{
+        'friendship_id': r['friendship_id'],
+        'to_user': _user_profile(r),
         'created_at': r['created_at'],
     } for r in rows])
 
