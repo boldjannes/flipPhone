@@ -42,7 +42,6 @@
     <nav class="nav-links">
       <a href="/admin/" class="active">Dashboard</a>
       <a href="/admin/users">Users</a>
-      <a href="#models" id="nav-models">Models</a>
       <a href="/admin/embed">Embeddings</a>
     </nav>
     <div class="header-right">
@@ -267,9 +266,7 @@ function switchTab(name) {
 document.querySelectorAll('.tab-btn').forEach(b =>
   b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
-['nav-models', 'card-models'].forEach(id => {
-  document.getElementById(id).addEventListener('click', e => { e.preventDefault(); switchTab('models'); });
-});
+document.getElementById('card-models').addEventListener('click', e => { e.preventDefault(); switchTab('models'); });
 
 // ── Models ────────────────────────────────────
 
