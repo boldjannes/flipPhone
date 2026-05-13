@@ -2,20 +2,296 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=1024">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff">
   <title>Lab — flipPhone</title>
-  <link rel="stylesheet" href="/static/admin.css">
+  <style>
+    :root {
+      --bg:     #ffffff;
+      --text:   #111111;
+      --dim:    #888888;
+      --border: #111111;
+      --accent: #1a4fd6;
+      --danger: #cc0000;
+      --font:   'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); }
+
+    /* ── Login ── */
+    #login-screen {
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      min-height: 100dvh; padding: 24px 16px;
+    }
+    #login-screen.hidden { display: none; }
+    .login-logo { margin-bottom: 24px; }
+    .login-logo img { height: 48px; }
+    .login-box {
+      width: 100%; max-width: 360px;
+      border: 1.5px solid var(--border);
+    }
+    .login-title {
+      padding: 16px 20px;
+      font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      border-bottom: 1.5px solid var(--border);
+    }
+    .login-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .form-row { display: flex; flex-direction: column; gap: 5px; }
+    .form-row label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+    .form-row input {
+      border: 1.5px solid var(--border); padding: 10px 12px;
+      font-family: var(--font); font-size: 14px; background: var(--bg); color: var(--text);
+      outline: none; width: 100%;
+    }
+    .form-row input:focus { border-color: var(--accent); }
+    .btn-login {
+      background: var(--text); color: var(--bg); border: none;
+      font-family: var(--font); font-size: 13px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 13px; cursor: pointer; width: 100%;
+    }
+    .btn-login:active { background: #333; }
+    .login-error { font-size: 12px; color: var(--danger); min-height: 16px; }
+
+    /* ── App shell ── */
+    #app { display: flex; flex-direction: column; min-height: 100dvh; }
+    #app.hidden { display: none; }
+
+    /* ── Header ── */
+    .header {
+      position: sticky; top: 0; z-index: 20;
+      display: flex; align-items: center; height: 48px;
+      border-bottom: 1.5px solid var(--border);
+      background: var(--bg);
+    }
+    .wordmark {
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none; color: var(--text);
+      padding: 0 16px; height: 100%;
+      border-right: 1.5px solid var(--border); flex-shrink: 0;
+    }
+    .wordmark img { height: 22px; }
+    .wordmark-label { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+
+    .tab-nav { display: flex; height: 100%; flex: 1; }
+    .tab-nav-btn {
+      background: none; border: none; border-right: 1.5px solid var(--border);
+      font-family: var(--font); font-size: 12px; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--dim); padding: 0 18px; cursor: pointer; height: 100%;
+      white-space: nowrap;
+    }
+    .tab-nav-btn.active { color: var(--text); background: #f4f4f4; }
+    .tab-nav-btn:active  { background: #ebebeb; }
+
+    .header-right {
+      margin-left: auto; display: flex; align-items: center;
+      gap: 12px; padding: 0 16px; flex-shrink: 0;
+    }
+    .username { font-size: 12px; color: var(--dim); }
+    .btn-logout {
+      background: none; border: 1.5px solid var(--border);
+      font-family: var(--font); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 5px 10px; cursor: pointer; color: var(--text);
+    }
+    .btn-logout:active { background: #f0f0f0; }
+
+    /* ── Banners ── */
+    .banner {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 16px; border-bottom: 1.5px solid var(--border);
+      background: #f8f8f8; font-size: 13px; color: var(--dim);
+    }
+    .banner.hidden { display: none; }
+    .banner-btn {
+      background: var(--text); color: var(--bg); border: none;
+      font-family: var(--font); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 7px 14px; cursor: pointer; flex-shrink: 0;
+    }
+
+    /* ── Trick grid ── */
+    .trick-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      border-bottom: 1.5px solid var(--border);
+    }
+    .trick-btn {
+      background: var(--bg); color: var(--dim); border: none;
+      border-right: 1.5px solid var(--border);
+      border-bottom: 1.5px solid var(--border);
+      font-family: var(--font); font-size: 12px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 13px 16px; cursor: pointer; text-align: left;
+    }
+    .trick-btn.selected { color: var(--text); background: #f0f0f0; }
+    .trick-btn:active { background: #e8e8e8; }
+
+    /* ── Reference card ── */
+    .ref-card { border-bottom: 1.5px solid var(--border); }
+    .ref-card.hidden { display: none; }
+    .ref-label {
+      padding: 6px 16px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--dim);
+      border-bottom: 1.5px solid var(--border);
+    }
+    #ref-canvas {
+      display: block; width: 100%;
+      background: #111;
+      aspect-ratio: 16 / 6;
+    }
+
+    /* ── Record area ── */
+    .record-area {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; padding: 28px 16px 36px;
+      max-width: 480px; width: 100%; margin: 0 auto;
+    }
+    .selected-trick-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--dim);
+    }
+    #selected-trick {
+      font-size: 1.7rem; font-weight: 700; letter-spacing: -0.5px;
+    }
+    #timer-display {
+      font-size: 4rem; font-weight: 700; letter-spacing: -3px;
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    #timer-display.recording { color: var(--danger); }
+    #record-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 22px; border: none;
+      background: var(--text); color: var(--bg);
+      font-family: var(--font); font-size: 1.1rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      cursor: pointer; user-select: none;
+    }
+    #record-btn:active { background: #333; }
+    #record-btn.recording { background: var(--danger); }
+    #status-msg {
+      font-size: 12px; color: var(--dim); text-align: center; min-height: 16px;
+    }
+
+    /* ── Recordings tab ── */
+    #tab-recordings { padding: 0; }
+    #tab-recordings.hidden { display: none; }
+    #tab-record.hidden { display: none; }
+
+    .filter-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; border-bottom: 1.5px solid var(--border);
+    }
+    .filter-bar label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+    .filter-bar select {
+      border: 1.5px solid var(--border); background: var(--bg);
+      font-family: var(--font); font-size: 13px; padding: 5px 8px; cursor: pointer;
+    }
+
+    .rec-table { width: 100%; border-collapse: collapse; }
+    .rec-table th {
+      text-align: left; padding: 10px 14px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--dim); border-bottom: 1.5px solid var(--border);
+      white-space: nowrap;
+    }
+    .rec-table td {
+      padding: 10px 14px; border-bottom: 1.5px solid #e8e8e8;
+      font-size: 13px; vertical-align: middle;
+    }
+    .rec-table tr:last-child td { border-bottom: none; }
+    .rec-table tbody tr:hover td { background: #fafafa; }
+    .table-msg { padding: 24px 16px; font-size: 13px; color: var(--dim); text-align: center; }
+
+    .btn-sm {
+      border: 1.5px solid var(--border); background: var(--bg);
+      font-family: var(--font); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 5px 10px; cursor: pointer; color: var(--text);
+    }
+    .btn-sm:active { background: #f0f0f0; }
+    .btn-sm:disabled { opacity: 0.35; cursor: default; }
+    .btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .btn-danger:active { background: #a00000; }
+    .ref-star { font-size: 15px; cursor: pointer; background: none; border: none; padding: 2px 6px; }
+    .ref-star:disabled { opacity: 0.35; cursor: default; }
+
+    /* ── Review overlay ── */
+    #review-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    #review-overlay.hidden { display: none; }
+    .review-header {
+      padding: 20px 16px 16px;
+      border-bottom: 1.5px solid var(--border);
+      flex-shrink: 0;
+    }
+    #review-trick { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
+    #review-meta  { font-size: 12px; color: var(--dim); margin-top: 3px; }
+    #anim-canvas  {
+      display: block; width: 100%; background: #111;
+      aspect-ratio: 4 / 3; flex-shrink: 0;
+    }
+    .anim-controls {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-bottom: 1.5px solid var(--border); flex-shrink: 0;
+    }
+    .anim-play-btn {
+      width: 34px; height: 34px; border: 1.5px solid var(--border);
+      background: var(--bg); font-size: 14px; cursor: pointer; flex-shrink: 0;
+    }
+    #anim-scrubber { flex: 1; accent-color: var(--accent); }
+    #anim-time { font-size: 12px; color: var(--dim); min-width: 44px; text-align: right; }
+    #anim-speed {
+      border: 1.5px solid var(--border); background: var(--bg);
+      font-family: var(--font); font-size: 12px; padding: 4px 6px; cursor: pointer;
+    }
+    .review-actions {
+      display: grid; grid-template-columns: 1fr 1fr; margin-top: auto; flex-shrink: 0;
+      border-top: 1.5px solid var(--border);
+    }
+    .review-actions button {
+      padding: 20px; border: none;
+      font-family: var(--font); font-size: 1rem; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+    }
+    #btn-discard { background: #f0f0f0; color: var(--text); border-right: 1.5px solid var(--border); }
+    #btn-discard:active { background: #e0e0e0; }
+    #btn-save { background: var(--text); color: var(--bg); }
+    #btn-save:active { background: #333; }
+    #btn-save:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: var(--text); color: var(--bg);
+      padding: 9px 20px; font-size: 13px;
+      opacity: 0; transition: opacity 0.25s;
+      pointer-events: none; z-index: 200; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+  </style>
 </head>
 <body>
 
-<!-- Login -->
-<div id="login">
+<!-- ── Login ── -->
+<div id="login-screen">
+  <div class="login-logo"><img src="/static/flipphone_icon_bw.svg" alt="flipPhone"></div>
   <div class="login-box">
-    <div class="login-logo">
-      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
-    </div>
     <div class="login-title">Lab</div>
-    <form id="login-form">
+    <div class="login-body">
       <div class="form-row">
         <label for="u">Username</label>
         <input id="u" type="text" name="username" autocomplete="username" required autofocus>
@@ -24,40 +300,71 @@
         <label for="p">Password</label>
         <input id="p" type="password" name="password" autocomplete="current-password" required>
       </div>
-      <div class="form-row" style="margin-top:20px">
-        <button type="submit" class="btn btn-full">Sign in</button>
-      </div>
-      <div id="login-error" class="error-msg"></div>
-    </form>
+      <button class="btn-login" id="login-btn">Sign in</button>
+      <div class="login-error" id="login-error"></div>
+    </div>
   </div>
 </div>
 
-<!-- App -->
-<div id="app">
+<!-- ── App ── -->
+<div id="app" class="hidden">
+
   <header class="header">
     <a class="wordmark" href="/lab/">
       <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
       <span class="wordmark-label">Lab</span>
     </a>
-    <nav class="nav-links">
-      <a href="/lab/" class="active">Recordings</a>
-      <a href="/lab/record">Record</a>
-      <a href="/lab/playground">Playground</a>
-    </nav>
+    <div class="tab-nav">
+      <button class="tab-nav-btn active" data-tab="record">Record</button>
+      <button class="tab-nav-btn" data-tab="recordings">Recordings</button>
+    </div>
     <div class="header-right">
-      <span id="logged-in-as"></span>
-      <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+      <span class="username" id="username-label"></span>
+      <button class="btn-logout" id="logout-btn">Logout</button>
     </div>
   </header>
 
-  <main class="main">
-    <div class="page-heading">
-      Recordings
-      <select id="trick-filter" class="trick-filter" style="margin-left:16px;font-size:0.82rem;padding:4px 8px;border:1.5px solid var(--border);background:var(--bg);cursor:pointer;">
-        <option value="">All tricks</option>
+  <!-- iOS sensor permission -->
+  <div id="perm-banner" class="banner hidden">
+    <span>Motion sensor access required.</span>
+    <button id="perm-btn" class="banner-btn">Enable Sensors</button>
+  </div>
+
+  <!-- Desktop hint -->
+  <div id="sensor-hint" class="banner hidden">
+    <span>Motion sensors required — open this page on your phone to record.</span>
+  </div>
+
+  <!-- Tab: Record -->
+  <div id="tab-record">
+    <div class="trick-grid" id="trick-grid"></div>
+
+    <div id="ref-card" class="ref-card hidden">
+      <div class="ref-label">Reference · <span id="ref-trick-label"></span></div>
+      <canvas id="ref-canvas"></canvas>
+    </div>
+
+    <div class="record-area">
+      <div class="selected-trick-label">Selected trick</div>
+      <div id="selected-trick">—</div>
+      <div id="timer-display">0:00.0</div>
+      <button id="record-btn">
+        <span class="btn-icon">⏺</span>
+        <span class="btn-label">Record</span>
+      </button>
+      <p id="status-msg">Initializing sensors…</p>
+    </div>
+  </div>
+
+  <!-- Tab: Recordings -->
+  <div id="tab-recordings" class="hidden">
+    <div class="filter-bar">
+      <label for="trick-filter">Trick</label>
+      <select id="trick-filter">
+        <option value="">All</option>
       </select>
     </div>
-    <table class="data-table">
+    <table class="rec-table">
       <thead>
         <tr>
           <th>Trick</th>
@@ -65,90 +372,79 @@
           <th>Duration</th>
           <th>Samples</th>
           <th>Date</th>
-          <th style="width:52px">Ref</th>
-          <th style="width:80px"></th>
+          <th>Ref</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="rec-tbody">
         <tr><td colspan="7" class="table-msg">Loading…</td></tr>
       </tbody>
     </table>
-  </main>
+  </div>
+
 </div>
 
+<!-- ── Review overlay ── -->
+<div id="review-overlay" class="hidden">
+  <div class="review-header">
+    <div id="review-trick"></div>
+    <div id="review-meta"></div>
+  </div>
+  <canvas id="anim-canvas"></canvas>
+  <div class="anim-controls">
+    <button id="anim-play" class="anim-play-btn">▶</button>
+    <input  id="anim-scrubber" type="range" min="0" max="100" value="0">
+    <span   id="anim-time">0.00s</span>
+    <select id="anim-speed">
+      <option value="0.25">0.25×</option>
+      <option value="0.5" selected>0.5×</option>
+      <option value="1">1×</option>
+    </select>
+  </div>
+  <div class="review-actions">
+    <button id="btn-discard">Discard</button>
+    <button id="btn-save">Save</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
 <script>
+// ── Recordings tab ──────────────────────────────
 const TOKEN_KEY = 'fp_game_token';
+function tok() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 let allRecordings = [];
-let refByTrick = {};   // trick → recording_id
+let refByTrick = {};
+let recordingsLoaded = false;
 
-function token() { return localStorage.getItem(TOKEN_KEY); }
+function fmtDur(ms) { return (ms / 1000).toFixed(2) + 's'; }
+function fmtDate(iso) { return iso ? iso.replace('T',' ').slice(0,16) : ''; }
 
-function showLogin(err) {
-  document.getElementById('login').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
-  if (err) document.getElementById('login-error').textContent = err;
-}
-
-function showApp(username) {
-  document.getElementById('login').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  if (username) document.getElementById('logged-in-as').textContent = username;
-}
-
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function fmtDuration(ms) {
-  return (ms / 1000).toFixed(2) + 's';
-}
-
-function fmtDate(iso) {
-  return iso ? iso.replace('T', ' ').slice(0, 16) : '';
-}
-
-function populateTrickFilter(recordings) {
-  const sel = document.getElementById('trick-filter');
-  const tricks = [...new Set(recordings.map(r => r.trick))].sort();
-  tricks.forEach(t => {
-    const opt = document.createElement('option');
-    opt.value = t;
-    opt.textContent = t;
-    sel.appendChild(opt);
-  });
-}
-
-function renderTable(recordings) {
+function renderTable(recs) {
   const tbody = document.getElementById('rec-tbody');
-  if (!recordings.length) {
+  if (!recs.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="table-msg">No recordings.</td></tr>';
     return;
   }
-  tbody.innerHTML = recordings.map(r => {
+  tbody.innerHTML = recs.map(r => {
     const isRef = refByTrick[r.trick] === r.id;
-    const refBtn = isRef
-      ? `<button class="btn btn-sm ref-btn" data-id="${esc(r.id)}" data-trick="${esc(r.trick)}" data-is-ref="1" title="Remove reference">★</button>`
-      : `<button class="btn btn-sm btn-ghost ref-btn" data-id="${esc(r.id)}" data-trick="${esc(r.trick)}" data-is-ref="0" title="Set as reference">☆</button>`;
-    return `
-    <tr data-id="${esc(r.id)}">
+    return `<tr>
       <td><strong>${esc(r.trick)}</strong></td>
       <td>${esc(r.collector || '—')}</td>
-      <td>${fmtDuration(r.duration_ms)}</td>
+      <td>${fmtDur(r.duration_ms)}</td>
       <td>${r.sample_count}</td>
       <td>${fmtDate(r.created_at)}</td>
-      <td>${refBtn}</td>
-      <td>
-        <button class="btn btn-sm btn-danger delete-btn" data-id="${esc(r.id)}">Delete</button>
-      </td>
+      <td><button class="ref-star" data-id="${esc(r.id)}" data-trick="${esc(r.trick)}" data-is-ref="${isRef?1:0}" title="${isRef?'Remove reference':'Set as reference'}">${isRef?'★':'☆'}</button></td>
+      <td><button class="btn-sm btn-danger delete-btn" data-id="${esc(r.id)}">Delete</button></td>
     </tr>`;
   }).join('');
 
-  tbody.querySelectorAll('.delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => deleteRecording(btn.dataset.id, btn));
-  });
-  tbody.querySelectorAll('.ref-btn').forEach(btn => {
-    btn.addEventListener('click', () => toggleRef(btn));
-  });
+  tbody.querySelectorAll('.delete-btn').forEach(btn =>
+    btn.addEventListener('click', () => deleteRec(btn.dataset.id, btn)));
+  tbody.querySelectorAll('.ref-star').forEach(btn =>
+    btn.addEventListener('click', () => toggleRef(btn)));
 }
 
 function applyFilter() {
@@ -156,118 +452,137 @@ function applyFilter() {
   renderTable(trick ? allRecordings.filter(r => r.trick === trick) : allRecordings);
 }
 
+async function loadRecordings() {
+  const h = { Authorization: 'Bearer ' + tok() };
+  const [rr, rf] = await Promise.all([
+    fetch('/lab/api/recordings', { headers: h }).catch(() => null),
+    fetch('/lab/api/references',  { headers: h }).catch(() => null),
+  ]);
+
+  if (!rr || rr.status === 401 || rr.status === 403) {
+    doLogout(); return;
+  }
+  if (!rr.ok) {
+    document.getElementById('rec-tbody').innerHTML =
+      '<tr><td colspan="7" class="table-msg" style="color:var(--danger)">Failed to load.</td></tr>';
+    return;
+  }
+
+  if (rf && rf.ok) {
+    const refs = await rf.json();
+    refByTrick = Object.fromEntries(Object.entries(refs).map(([t,r]) => [t, r.id]));
+  }
+
+  allRecordings = await rr.json();
+
+  const sel = document.getElementById('trick-filter');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">All</option>';
+  [...new Set(allRecordings.map(r => r.trick))].sort().forEach(t => {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    if (t === prev) o.selected = true;
+    sel.appendChild(o);
+  });
+
+  applyFilter();
+  recordingsLoaded = true;
+}
+
+async function deleteRec(id, btn) {
+  if (!confirm('Delete this recording?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/lab/api/recordings/${encodeURIComponent(id)}`, {
+    method: 'DELETE', headers: { Authorization: 'Bearer ' + tok() },
+  }).catch(() => null);
+  if (r && r.ok) {
+    allRecordings = allRecordings.filter(x => x.id !== id);
+    if (refByTrick[Object.keys(refByTrick).find(k => refByTrick[k] === id)]) {
+      const trick = Object.keys(refByTrick).find(k => refByTrick[k] === id);
+      if (trick) delete refByTrick[trick];
+    }
+    applyFilter();
+    showToast('Deleted.');
+  } else {
+    btn.disabled = false;
+    showToast('Delete failed.');
+  }
+}
+
 async function toggleRef(btn) {
   const { id, trick } = btn.dataset;
   const isRef = btn.dataset.isRef === '1';
   btn.disabled = true;
-  if (isRef) {
-    const r = await fetch(`/lab/api/references/${encodeURIComponent(trick)}`, {
-      method: 'DELETE',
-      headers: { Authorization: 'Bearer ' + token() },
-    }).catch(() => null);
-    if (r && r.ok) {
-      delete refByTrick[trick];
-      applyFilter();
-    }
-  } else {
-    const r = await fetch(`/lab/api/references/${encodeURIComponent(trick)}`, {
-      method: 'PUT',
-      headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recording_id: id }),
-    }).catch(() => null);
-    if (r && r.ok) {
-      refByTrick[trick] = id;
-      applyFilter();
+  const method = isRef ? 'DELETE' : 'PUT';
+  const url = `/lab/api/references/${encodeURIComponent(trick)}`;
+  const opts = { method, headers: { Authorization: 'Bearer ' + tok(), 'Content-Type': 'application/json' } };
+  if (!isRef) opts.body = JSON.stringify({ recording_id: id });
+  const r = await fetch(url, opts).catch(() => null);
+  if (r && r.ok) {
+    if (isRef) delete refByTrick[trick];
+    else refByTrick[trick] = id;
+    applyFilter();
+    // Reload references in recorder so the animation updates
+    if (typeof loadReferences === 'function') {
+      await loadReferences();
+      if (typeof showRefAnimation === 'function' && window._selectedTrick) {
+        showRefAnimation(window._selectedTrick);
+      }
     }
   }
   btn.disabled = false;
 }
 
-async function deleteRecording(id, btn) {
-  if (!confirm('Delete this recording?')) return;
-  btn.disabled = true;
-  const r = await fetch(`/lab/api/recordings/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { Authorization: 'Bearer ' + token() },
-  }).catch(() => null);
+document.getElementById('trick-filter').addEventListener('change', applyFilter);
 
-  if (r && r.ok) {
-    allRecordings = allRecordings.filter(rec => rec.id !== id);
-    applyFilter();
-  } else {
-    btn.disabled = false;
-    alert('Delete failed.');
-  }
+// ── Tabs ────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-nav-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === name));
+  document.getElementById('tab-record').classList.toggle('hidden', name !== 'record');
+  document.getElementById('tab-recordings').classList.toggle('hidden', name !== 'recordings');
+  if (name === 'recordings' && !recordingsLoaded) loadRecordings();
 }
 
-async function loadRecordings() {
-  const headers = { Authorization: 'Bearer ' + token() };
-  const [recResp, refResp] = await Promise.all([
-    fetch('/lab/api/recordings', { headers }).catch(() => null),
-    fetch('/lab/api/references',  { headers }).catch(() => null),
-  ]);
+document.querySelectorAll('.tab-nav-btn').forEach(btn =>
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab)));
 
-  if (!recResp) {
-    document.getElementById('rec-tbody').innerHTML =
-      '<tr><td colspan="7" class="table-msg" style="color:var(--danger)">Network error.</td></tr>';
-    return;
-  }
-  if (recResp.status === 401 || recResp.status === 403) {
-    localStorage.removeItem(TOKEN_KEY);
-    showLogin('Session expired. Please sign in again.');
-    return;
-  }
-  if (!recResp.ok) {
-    document.getElementById('rec-tbody').innerHTML =
-      '<tr><td colspan="7" class="table-msg" style="color:var(--danger)">Failed to load recordings.</td></tr>';
-    return;
-  }
-
-  if (refResp && refResp.ok) {
-    const refs = await refResp.json();
-    refByTrick = Object.fromEntries(Object.entries(refs).map(([t, r]) => [t, r.id]));
-  }
-
-  allRecordings = await recResp.json();
-  populateTrickFilter(allRecordings);
-  renderTable(allRecordings);
+// ── Auth ────────────────────────────────────────
+function showLogin(err) {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  if (err) document.getElementById('login-error').textContent = err;
 }
 
-async function checkAuth() {
-  const t = token();
-  if (!t) { showLogin(); return; }
-
-  const r = await fetch('/game/api/auth/me', {
-    headers: { Authorization: 'Bearer ' + t },
-  }).catch(() => null);
-
-  if (!r || !r.ok) {
-    localStorage.removeItem(TOKEN_KEY);
-    showLogin();
-    return;
-  }
-
-  const me = await r.json();
-  if (me.role !== 'lab' && me.role !== 'admin') {
-    localStorage.removeItem(TOKEN_KEY);
-    showLogin('Account does not have Lab access.');
-    return;
-  }
-
-  showApp(me.username);
-  loadRecordings();
+function showApp(username) {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('username-label').textContent = username;
 }
 
-document.getElementById('login-form').addEventListener('submit', async e => {
-  e.preventDefault();
+function doLogout() {
+  const t = tok();
+  if (t) {
+    fetch('/game/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + t } })
+      .catch(() => {});
+    localStorage.removeItem(TOKEN_KEY);
+  }
+  showLogin();
+}
+
+document.getElementById('logout-btn').addEventListener('click', doLogout);
+
+document.getElementById('login-btn').addEventListener('click', async () => {
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
+  const username = document.getElementById('u').value.trim();
+  const password = document.getElementById('p').value;
+  if (!username || !password) return;
 
-  const fd = new FormData(e.target);
   const r = await fetch('/game/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
+    body: JSON.stringify({ username, password }),
   }).catch(() => null);
 
   if (!r) { errEl.textContent = 'Network error.'; return; }
@@ -282,24 +597,41 @@ document.getElementById('login-form').addEventListener('submit', async e => {
 
   localStorage.setItem(TOKEN_KEY, data.token);
   showApp(me.username);
-  loadRecordings();
 });
 
-document.getElementById('logout-btn').addEventListener('click', async () => {
-  const t = token();
-  if (t) {
-    await fetch('/game/api/auth/logout', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + t },
-    }).catch(() => {});
+document.getElementById('u').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('p').focus();
+});
+document.getElementById('p').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
+
+// ── Boot ────────────────────────────────────────
+(async function boot() {
+  const t = tok();
+  if (!t) { showLogin(); return; }
+  const r = await fetch('/game/api/auth/me', {
+    headers: { Authorization: 'Bearer ' + t },
+  }).catch(() => null);
+  if (!r || !r.ok) { showLogin(); return; }
+  const me = await r.json();
+  if (me.role !== 'lab' && me.role !== 'admin') {
     localStorage.removeItem(TOKEN_KEY);
+    showLogin('Account does not have Lab access.');
+    return;
   }
-  showLogin();
-});
+  showApp(me.username);
+})();
 
-document.getElementById('trick-filter').addEventListener('change', applyFilter);
-
-checkAuth();
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2500);
+}
 </script>
+
+<script src="/static/lab/recorder.js"></script>
+
 </body>
 </html>

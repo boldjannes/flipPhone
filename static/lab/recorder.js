@@ -47,6 +47,7 @@ function buildTrickGrid() {
 function selectTrick(trick) {
   if (state.isRecording) return;
   state.selectedTrick = trick;
+  window._selectedTrick = trick;
   $('selected-trick').textContent = trick;
   document.querySelectorAll('.trick-btn').forEach(b =>
     b.classList.toggle('selected', b.textContent === trick));
@@ -488,5 +489,9 @@ async function init() {
     closeReview();
   });
 }
+
+// Expose for cross-script use
+window.loadReferences  = loadReferences;
+window.showRefAnimation = showRefAnimation;
 
 document.addEventListener('DOMContentLoaded', init);

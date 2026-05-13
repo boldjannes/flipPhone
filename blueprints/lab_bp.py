@@ -5,7 +5,7 @@ Mounted at /lab.
 
 import json
 
-from flask import Blueprint, g, jsonify, render_template, request
+from flask import Blueprint, g, jsonify, redirect, render_template, request
 
 from database import get_db, now_iso, require_lab
 
@@ -147,9 +147,9 @@ def get_references():
         except Exception:
             continue
         result[row['trick']] = {
-            'id':           row['recording_id'],
-            'samples':      samples,
-            'duration_ms':  row['duration_ms'],
+            'id': row['recording_id'],
+            'samples': samples,
+            'duration_ms': row['duration_ms'],
             'sample_count': row['sample_count'],
         }
     return jsonify(result)
