@@ -49,6 +49,11 @@ def training_page():
     return render_template('admin/training.html')
 
 
+@admin.route('/recordings')
+def recordings_page():
+    return render_template('admin/recordings.html')
+
+
 @admin.route('/models')
 def models_page():
     return render_template('admin/models.html')

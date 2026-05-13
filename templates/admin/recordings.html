@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024">
+  <title>Recordings — Admin — flipPhone</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    </div>
+    <div class="login-title">Admin Panel</div>
+    <form id="login-form">
+      <div class="form-row">
+        <label for="u">Username</label>
+        <input id="u" type="text" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="form-row">
+        <label for="p">Password</label>
+        <input id="p" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div class="form-row" style="margin-top:20px">
+        <button type="submit" class="btn btn-full">Sign in</button>
+      </div>
+      <div id="login-error" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header class="header">
+    <a class="wordmark" href="/admin/">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+      <span class="wordmark-label">Admin</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/admin/">Dashboard</a>
+      <a href="/admin/training">Training</a>
+      <a href="/admin/models">Models</a>
+      <a href="/admin/users">Users</a>
+      <a href="/admin/embed">Embeddings</a>
+      <a href="/admin/recordings" class="active">Recordings</a>
+    </nav>
+    <div class="header-right">
+      <span id="logged-in-as"></span>
+      <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:20px">
+      <label style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)">Trick</label>
+      <select id="trick-filter" style="border:1.5px solid var(--border);background:var(--bg);font-family:var(--font);font-size:13px;padding:5px 8px;cursor:pointer">
+        <option value="">All</option>
+      </select>
+      <label style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin-left:8px">Collector</label>
+      <select id="collector-filter" style="border:1.5px solid var(--border);background:var(--bg);font-family:var(--font);font-size:13px;padding:5px 8px;cursor:pointer">
+        <option value="">All</option>
+      </select>
+      <span id="rec-count" style="margin-left:auto;font-size:12px;color:var(--dim)"></span>
+    </div>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Trick</th>
+          <th>Collector</th>
+          <th>Duration</th>
+          <th>Samples</th>
+          <th>Date</th>
+          <th>Ref</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rec-tbody">
+        <tr><td colspan="7" class="table-msg">Loading…</td></tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<script>
+const TOKEN_KEY = 'fp_game_token';
+
+function token()       { return localStorage.getItem(TOKEN_KEY); }
+function authHeaders() { return { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }; }
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showLogin(err) {
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display   = 'none';
+  if (err) document.getElementById('login-error').textContent = err;
+}
+
+function showApp(username) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display   = 'block';
+  if (username) document.getElementById('logged-in-as').textContent = username;
+}
+
+async function verifyAdmin(t) {
+  const r = await fetch('/admin/api/users', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+  return r && r.ok;
+}
+
+async function checkAuth() {
+  const t = token();
+  if (!t) { showLogin(); return; }
+  if (await verifyAdmin(t)) {
+    const me  = await fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+    const usr = (me && me.ok) ? (await me.json()).username : '';
+    showApp(usr);
+    loadRecordings();
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+  }
+}
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  const fd = new FormData(e.target);
+  const r  = await fetch('/game/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
+  }).catch(() => null);
+  if (!r) { errEl.textContent = 'Network error.'; return; }
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error || 'Login failed.'; return; }
+  localStorage.setItem(TOKEN_KEY, data.token);
+  if (await verifyAdmin(data.token)) {
+    showApp(data.user && data.user.username);
+    loadRecordings();
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    errEl.textContent = 'Account does not have admin access.';
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  const t = token();
+  if (t) {
+    await fetch('/game/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + t } }).catch(() => {});
+    localStorage.removeItem(TOKEN_KEY);
+  }
+  showLogin();
+});
+
+// ── Recordings ────────────────────────────────
+
+let allRecordings = [];
+let refByTrick    = {};
+
+function fmtDur(ms)  { return (ms / 1000).toFixed(2) + 's'; }
+function fmtDate(iso) { return iso ? iso.replace('T', ' ').slice(0, 16) : '—'; }
+
+function applyFilter() {
+  const trick     = document.getElementById('trick-filter').value;
+  const collector = document.getElementById('collector-filter').value;
+  let recs = allRecordings;
+  if (trick)     recs = recs.filter(r => r.trick     === trick);
+  if (collector) recs = recs.filter(r => r.collector === collector);
+  renderTable(recs);
+  document.getElementById('rec-count').textContent = `${recs.length} recording${recs.length !== 1 ? 's' : ''}`;
+}
+
+function renderTable(recs) {
+  const tbody = document.getElementById('rec-tbody');
+  if (!recs.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="table-msg">No recordings.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = recs.map(r => {
+    const isRef = refByTrick[r.trick] === r.id;
+    return `<tr>
+      <td><strong>${esc(r.trick)}</strong></td>
+      <td>${esc(r.collector || '—')}</td>
+      <td>${fmtDur(r.duration_ms)}</td>
+      <td>${r.sample_count}</td>
+      <td>${fmtDate(r.created_at)}</td>
+      <td>
+        <button class="btn btn-sm ref-btn" data-id="${esc(r.id)}" data-trick="${esc(r.trick)}" data-is-ref="${isRef ? 1 : 0}"
+                title="${isRef ? 'Remove reference' : 'Set as reference'}"
+                style="font-size:15px;padding:2px 8px">${isRef ? '★' : '☆'}</button>
+      </td>
+      <td>
+        <button class="btn btn-sm btn-danger delete-btn" data-id="${esc(r.id)}">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.delete-btn').forEach(btn =>
+    btn.addEventListener('click', () => deleteRec(btn.dataset.id, btn)));
+  tbody.querySelectorAll('.ref-btn').forEach(btn =>
+    btn.addEventListener('click', () => toggleRef(btn)));
+}
+
+async function loadRecordings() {
+  const h = authHeaders();
+  const [rr, rf] = await Promise.all([
+    fetch('/lab/api/recordings', { headers: h }).catch(() => null),
+    fetch('/lab/api/references',  { headers: h }).catch(() => null),
+  ]);
+
+  if (!rr || rr.status === 401 || rr.status === 403) { showLogin('Session expired.'); return; }
+  if (!rr.ok) {
+    document.getElementById('rec-tbody').innerHTML =
+      '<tr><td colspan="7" class="table-msg" style="color:var(--danger)">Failed to load.</td></tr>';
+    return;
+  }
+
+  if (rf && rf.ok) {
+    const refs = await rf.json();
+    refByTrick = Object.fromEntries(Object.entries(refs).map(([t, r]) => [t, r.id]));
+  }
+
+  allRecordings = await rr.json();
+
+  const trickSel = document.getElementById('trick-filter');
+  const collSel  = document.getElementById('collector-filter');
+  const prevTrick = trickSel.value;
+  const prevColl  = collSel.value;
+
+  const tricks     = [...new Set(allRecordings.map(r => r.trick))].sort();
+  const collectors = [...new Set(allRecordings.map(r => r.collector).filter(Boolean))].sort();
+
+  trickSel.innerHTML = '<option value="">All</option>' +
+    tricks.map(t => `<option value="${esc(t)}"${t === prevTrick ? ' selected' : ''}>${esc(t)}</option>`).join('');
+  collSel.innerHTML = '<option value="">All</option>' +
+    collectors.map(c => `<option value="${esc(c)}"${c === prevColl ? ' selected' : ''}>${esc(c)}</option>`).join('');
+
+  applyFilter();
+}
+
+async function deleteRec(id, btn) {
+  if (!confirm('Delete this recording?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/lab/api/recordings/${encodeURIComponent(id)}`, {
+    method: 'DELETE', headers: authHeaders(),
+  }).catch(() => null);
+  if (r && r.ok) {
+    const trick = allRecordings.find(x => x.id === id)?.trick;
+    allRecordings = allRecordings.filter(x => x.id !== id);
+    if (trick && refByTrick[trick] === id) delete refByTrick[trick];
+    applyFilter();
+  } else {
+    btn.disabled = false;
+    alert('Delete failed.');
+  }
+}
+
+async function toggleRef(btn) {
+  const { id, trick } = btn.dataset;
+  const isRef = btn.dataset.isRef === '1';
+  btn.disabled = true;
+  const method = isRef ? 'DELETE' : 'PUT';
+  const url    = `/lab/api/references/${encodeURIComponent(trick)}`;
+  const opts   = { method, headers: authHeaders() };
+  if (!isRef) opts.body = JSON.stringify({ recording_id: id });
+  const r = await fetch(url, opts).catch(() => null);
+  if (r && r.ok) {
+    if (isRef) delete refByTrick[trick];
+    else refByTrick[trick] = id;
+    applyFilter();
+  }
+  btn.disabled = false;
+}
+
+document.getElementById('trick-filter').addEventListener('change', applyFilter);
+document.getElementById('collector-filter').addEventListener('change', applyFilter);
+
+// ── Init ──────────────────────────────────────
+checkAuth();
+</script>
+</body>
+</html>
