@@ -131,6 +131,36 @@ def init_db():
     except sqlite3.OperationalError:
         pass  # column already exists
 
+    # Migration: make recordings.key_id nullable and add user_id (references game_users)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(recordings)").fetchall()}
+    if 'user_id' not in cols:
+        conn.execute('PRAGMA foreign_keys = OFF')
+        conn.executescript('''
+            CREATE TABLE recordings_v2 (
+                id              TEXT    PRIMARY KEY,
+                key_id          INTEGER REFERENCES api_keys(id) ON DELETE CASCADE,
+                user_id         INTEGER REFERENCES game_users(id) ON DELETE SET NULL,
+                trick           TEXT    NOT NULL,
+                timestamp       TEXT    NOT NULL,
+                duration_ms     INTEGER NOT NULL,
+                sample_count    INTEGER NOT NULL,
+                sample_rate_hz  INTEGER NOT NULL,
+                samples         TEXT    NOT NULL,
+                source          TEXT    NOT NULL DEFAULT 'lab',
+                created_at      TEXT    NOT NULL
+            );
+            INSERT INTO recordings_v2
+                (id, key_id, trick, timestamp, duration_ms,
+                 sample_count, sample_rate_hz, samples, source, created_at)
+                SELECT id, key_id, trick, timestamp, duration_ms,
+                       sample_count, sample_rate_hz, samples, source, created_at
+                FROM recordings;
+            DROP TABLE recordings;
+            ALTER TABLE recordings_v2 RENAME TO recordings;
+        ''')
+        conn.execute('PRAGMA foreign_keys = ON')
+        conn.commit()
+
     # Seed default tricks if table is empty
     if conn.execute('SELECT COUNT(*) FROM tricks').fetchone()[0] == 0:
         default_tricks = [
@@ -193,10 +223,55 @@ def require_api_key(f):
     return decorated
 
 
-def require_admin(f):
+def require_admin_key(f):
+    """Legacy: require API-key-based admin. Kept for backward compat."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if not g.key_row['is_admin']:
             return jsonify({'error': 'Admin access required'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+def _session_user(token):
+    return get_db().execute(
+        '''SELECT u.id AS uid, u.username, u.display_name, u.role
+           FROM game_sessions s
+           JOIN game_users u ON s.user_id = u.id
+           WHERE s.token = ? AND s.expires_at > ?''',
+        (token, now_iso()),
+    ).fetchone()
+
+
+def require_lab(f):
+    """Valid game session with role 'lab' or 'admin'."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            return jsonify({'error': 'Login required'}), 401
+        row = _session_user(auth[7:])
+        if not row:
+            return jsonify({'error': 'Session expired or invalid'}), 401
+        if row['role'] not in ('lab', 'admin'):
+            return jsonify({'error': 'Lab access required'}), 403
+        g.game_user = row
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_admin(f):
+    """Valid game session with role 'admin'."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            return jsonify({'error': 'Login required'}), 401
+        row = _session_user(auth[7:])
+        if not row:
+            return jsonify({'error': 'Session expired or invalid'}), 401
+        if row['role'] != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        g.game_user = row
         return f(*args, **kwargs)
     return decorated

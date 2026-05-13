@@ -43,6 +43,7 @@ def _user_response(row):
         'id': row['id'],
         'username': row['username'],
         'display_name': row['display_name'],
+        'role': row['role'],
     }
 
 
@@ -56,7 +57,7 @@ def require_game_session(f):
         token = auth[7:]
         db = get_db()
         row = db.execute(
-            '''SELECT s.*, u.id AS uid, u.username, u.display_name,
+            '''SELECT s.*, u.id AS uid, u.username, u.display_name, u.role,
                       u.tricks_landed, u.games_won, u.games_lost
                FROM game_sessions s
                JOIN game_users u ON s.user_id = u.id
@@ -152,6 +153,7 @@ def auth_me():
         'id': row['uid'],
         'username': row['username'],
         'display_name': row['display_name'],
+        'role': row['role'],
         'tricks_landed': row['tricks_landed'],
         'games_won': row['games_won'],
         'games_lost': row['games_lost'],

@@ -1,63 +1,292 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
-    <meta name="theme-color" content="#0d0d0d" />
-    <title>FlipPhone – Playground</title>
-    <link rel="stylesheet" href="/static/shared/style.css" />
-  </head>
-  <body>
-    <div id="app">
-      <header>
-        <h1>🎮 Playground</h1>
-        <a href="/lab/" class="back-link">← App</a>
-      </header>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff">
+  <title>Playground — Lab — flipPhone</title>
+  <style>
+    :root {
+      --bg:     #ffffff;
+      --text:   #111111;
+      --dim:    #888888;
+      --border: #111111;
+      --accent: #1a4fd6;
+      --danger: #cc0000;
+      --font:   'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100dvh;
+    }
 
-      <section class="view active" style="display: flex">
-        <!-- Sensor hint (desktop / no sensors) -->
-        <div id="pg-sensor-hint" class="card pg-hint hidden">
-          <p>
-            This feature requires a phone with motion sensors.<br />
-            Open this page on your phone to try it out.
-          </p>
-        </div>
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      height: 48px;
+      border-bottom: 1.5px solid var(--border);
+      padding: 0 16px;
+      gap: 0;
+    }
+    .wordmark {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: var(--text);
+      padding-right: 16px;
+      border-right: 1.5px solid var(--border);
+      height: 100%;
+    }
+    .wordmark img { height: 22px; }
+    .wordmark-label { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
 
-        <!-- iOS permission banner -->
-        <div id="pg-permission-banner" class="hidden">
-          <span>Motion sensor access is required.</span>
-          <button id="pg-request-permission-btn">Enable Sensors</button>
-        </div>
+    .nav-links { display: flex; height: 100%; }
+    .nav-links a {
+      text-decoration: none;
+      color: var(--dim);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      border-right: 1.5px solid var(--border);
+      text-transform: uppercase;
+    }
+    .nav-links a.active { color: var(--text); }
+    .nav-links a:active { background: #f0f0f0; }
 
-        <!-- Record -->
-        <div class="card record-area">
-          <div id="pg-timer-display">0:00.0</div>
-          <button id="pg-record-btn" aria-label="Start / stop recording">
-            <span class="btn-icon">⏺</span>
-            <span class="btn-label">RECORD</span>
-          </button>
-          <p id="pg-status-msg">Initializing sensors…</p>
-        </div>
+    .header-right {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--dim);
+    }
 
-        <!-- Results -->
-        <div id="pg-results-card" class="card hidden">
-          <div id="pg-trick-name"></div>
-          <div id="pg-confidence"></div>
-          <div id="pg-chart"></div>
-        </div>
-      </section>
-    </div>
+    /* ── Content ── */
+    .pg-main {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 20px 16px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
 
-    <div id="toast" role="status" aria-live="polite"></div>
-    <script src="/static/lab/playground.js"></script>
-  </body>
+    /* ── Hint / permission banner ── */
+    .pg-hint {
+      padding: 14px 16px;
+      border: 1.5px solid var(--border);
+      background: #f8f8f8;
+      font-size: 13px;
+      color: var(--dim);
+      line-height: 1.5;
+    }
+    .pg-hint.hidden { display: none; }
+
+    .pg-perm-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border: 1.5px solid var(--border);
+      background: #f8f8f8;
+      font-size: 13px;
+    }
+    .pg-perm-banner.hidden { display: none; }
+    .pg-perm-btn {
+      background: var(--text);
+      color: var(--bg);
+      border: none;
+      font-family: var(--font);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 8px 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ── Record card ── */
+    .pg-card {
+      border: 1.5px solid var(--border);
+      padding: 28px 20px 20px;
+    }
+    .pg-timer {
+      font-size: 3.6rem;
+      font-weight: 700;
+      letter-spacing: -2px;
+      text-align: center;
+      margin-bottom: 24px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .pg-timer.recording { color: var(--danger); }
+
+    .pg-record-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 20px;
+      background: var(--text);
+      color: var(--bg);
+      border: none;
+      font-family: var(--font);
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.1s;
+      user-select: none;
+    }
+    .pg-record-btn:active { background: #333; }
+    .pg-record-btn.recording { background: var(--danger); }
+
+    .pg-status {
+      text-align: center;
+      font-size: 12px;
+      color: var(--dim);
+      margin-top: 14px;
+      min-height: 16px;
+      line-height: 1.4;
+    }
+
+    /* ── Results ── */
+    .pg-results {
+      border: 1.5px solid var(--border);
+      padding: 20px;
+    }
+    .pg-results.hidden { display: none; }
+
+    .pg-trick-name {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 2px;
+    }
+    .pg-confidence {
+      font-size: 13px;
+      color: var(--dim);
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      border-bottom: 1.5px solid var(--border);
+    }
+
+    .pg-bar-row {
+      display: grid;
+      grid-template-columns: 110px 1fr 44px;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .pg-bar-row:last-child { margin-bottom: 0; }
+
+    .pg-bar-label {
+      font-size: 11px;
+      color: var(--dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pg-bar-label.pg-bar-top { color: var(--text); font-weight: 700; }
+    .pg-bar-track { background: #eeeeee; height: 6px; }
+    .pg-bar-fill { background: #cccccc; height: 100%; transition: width 0.35s ease; }
+    .pg-bar-fill.pg-bar-fill-top { background: var(--accent); }
+    .pg-bar-pct { font-size: 12px; color: var(--dim); text-align: right; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--text);
+      color: var(--bg);
+      padding: 9px 20px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.25s;
+      pointer-events: none;
+      z-index: 100;
+      white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <a class="wordmark" href="/lab/">
+    <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    <span class="wordmark-label">Lab</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/lab/">Recordings</a>
+    <a href="/lab/record">Record</a>
+    <a href="/lab/playground" class="active">Playground</a>
+  </nav>
+  <div class="header-right" id="logged-in-as"></div>
+</header>
+
+<div class="pg-main">
+
+  <div id="pg-sensor-hint" class="pg-hint hidden">
+    This feature requires a phone with motion sensors. Open this page on your phone to try it.
+  </div>
+
+  <div id="pg-permission-banner" class="pg-perm-banner hidden">
+    <span>Motion sensor access required.</span>
+    <button id="pg-request-permission-btn" class="pg-perm-btn">Enable Sensors</button>
+  </div>
+
+  <div class="pg-card">
+    <div id="pg-timer-display" class="pg-timer">0:00.0</div>
+    <button id="pg-record-btn" class="pg-record-btn">
+      <span class="btn-icon">⏺</span>
+      <span class="btn-label">Record</span>
+    </button>
+    <p id="pg-status-msg" class="pg-status">Initializing sensors…</p>
+  </div>
+
+  <div id="pg-results-card" class="pg-results hidden">
+    <div id="pg-trick-name" class="pg-trick-name"></div>
+    <div id="pg-confidence" class="pg-confidence"></div>
+    <div id="pg-chart"></div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+(async function checkAuth() {
+  const t = localStorage.getItem('fp_game_token');
+  if (!t) { window.location.replace('/lab/'); return; }
+  const r = await fetch('/game/api/auth/me', {
+    headers: { Authorization: 'Bearer ' + t },
+  }).catch(() => null);
+  if (!r || !r.ok) { window.location.replace('/lab/'); return; }
+  const me = await r.json();
+  if (me.role !== 'lab' && me.role !== 'admin') { window.location.replace('/lab/'); return; }
+  document.getElementById('logged-in-as').textContent = me.username;
+})();
+</script>
+<script src="/static/lab/playground.js"></script>
+
+</body>
 </html>

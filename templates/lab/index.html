@@ -1,278 +1,305 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
-    <meta name="theme-color" content="#0d0d0d" />
-    <title>FlipPhone</title>
-    <link rel="stylesheet" href="/static/shared/style.css" />
-  </head>
-  <body>
-    <div id="app">
-      <!-- ── Header ── -->
-      <header>
-        <h1>📱 FlipPhone</h1>
-        <span id="connected-as" class="connected-as"></span>
-        <span id="dataset-count">0</span>
-        <button id="btn-settings" class="settings-btn" aria-label="Settings">
-          ⚙️
-        </button>
-      </header>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024">
+  <title>Lab — flipPhone</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
 
-      <!-- ── Tab bar ── -->
-      <nav class="tab-bar" role="tablist">
-        <button
-          class="tab-btn active"
-          data-tab="record"
-          role="tab"
-          aria-selected="true"
-        >
-          🎬 Record
-        </button>
-        <button
-          class="tab-btn"
-          data-tab="dataset"
-          role="tab"
-          aria-selected="false"
-        >
-          📂 Dataset
-        </button>
-        <a class="tab-btn" href="/lab/playground">🎮 Playground</a>
-        <a class="tab-btn" href="/lab/embed">🧬 Embed</a>
-      </nav>
-
-      <!-- ════════════════ RECORD VIEW ════════════════ -->
-      <section id="record-view" class="view active" role="tabpanel">
-        <!-- Sensor permission banner (iOS) -->
-        <div id="permission-banner" class="hidden">
-          <span>⚠️ Motion sensor access is required.</span>
-          <button id="request-permission-btn">Enable Sensors</button>
-        </div>
-
-        <!-- Trick selector -->
-        <div class="card">
-          <div class="card-title">Select Trick</div>
-          <div class="trick-grid">
-            <!-- Populated by JS -->
-          </div>
-        </div>
-
-        <!-- Reference animation (shows how the selected trick looks) -->
-        <div id="ref-anim-card" class="card hidden">
-          <div class="card-title">
-            Reference: <span id="ref-trick-label"></span>
-          </div>
-          <canvas
-            id="ref-anim-canvas"
-            aria-label="Reference trick animation"
-          ></canvas>
-        </div>
-
-        <!-- Live sensor readout -->
-        <div class="card">
-          <div class="card-title">Live Sensors</div>
-          <div style="margin-bottom: 8px">
-            <div class="card-title" style="margin-bottom: 6px">
-              Accelerometer (m/s²)
-            </div>
-            <div class="sensor-grid">
-              <div class="sensor-val">
-                <div class="axis">X</div>
-                <div class="val" id="s-ax">–</div>
-              </div>
-              <div class="sensor-val">
-                <div class="axis">Y</div>
-                <div class="val" id="s-ay">–</div>
-              </div>
-              <div class="sensor-val">
-                <div class="axis">Z</div>
-                <div class="val" id="s-az">–</div>
-              </div>
-            </div>
-          </div>
-          <div>
-            <div class="card-title" style="margin-bottom: 6px">
-              Gyroscope (rad/s)
-            </div>
-            <div class="sensor-grid">
-              <div class="sensor-val">
-                <div class="axis">α</div>
-                <div class="val" id="s-gx">–</div>
-              </div>
-              <div class="sensor-val">
-                <div class="axis">β</div>
-                <div class="val" id="s-gy">–</div>
-              </div>
-              <div class="sensor-val">
-                <div class="axis">γ</div>
-                <div class="val" id="s-gz">–</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Record button -->
-        <div class="card record-area">
-          <div id="timer-display">0:00.0</div>
-          <button id="record-btn" aria-label="Start / stop recording">
-            <span class="btn-icon">⏺</span>
-            <span class="btn-label">RECORD</span>
-          </button>
-          <p id="status-msg">Initializing sensors…</p>
-        </div>
-      </section>
-      <!-- ════════════════ END RECORD VIEW ════════════════ -->
-
-      <!-- ════════════════ DATASET VIEW ════════════════ -->
-      <section id="dataset-view" class="view" role="tabpanel">
-        <!-- User stats (always visible) -->
-        <div class="card">
-          <div class="card-title">My Recordings</div>
-          <div id="user-stats">
-            <!-- Populated by JS -->
-          </div>
-        </div>
-
-        <!-- Admin section (hidden for non-admins) -->
-        <div id="admin-section" class="hidden">
-          <!-- Filter bar -->
-          <div class="filter-bar">
-            <select id="filter-trick" class="filter-select">
-              <option value="">All Tricks</option>
-            </select>
-            <select id="filter-collector" class="filter-select">
-              <option value="">All Collectors</option>
-            </select>
-          </div>
-
-          <!-- Recording list -->
-          <div id="dataset-list">
-            <!-- Populated by JS -->
-          </div>
-
-          <!-- Key management -->
-          <div id="admin-panel" class="card admin-panel">
-            <!-- Populated by JS -->
-          </div>
-        </div>
-      </section>
-      <!-- ════════════════ END DATASET VIEW ════════════════ -->
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
     </div>
-    <!-- /#app -->
-
-    <!-- ════════════════ REVIEW OVERLAY ════════════════ -->
-    <div
-      id="review-overlay"
-      class="hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="review-heading"
-    >
-      <div id="review-sheet">
-        <h2 id="review-heading">Save <span id="review-trick-name"></span>?</h2>
-
-        <div class="review-stats">
-          <div class="stat-box">
-            <div class="stat-val" id="review-duration">–</div>
-            <div class="stat-lbl">Duration</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-val" id="review-samples">–</div>
-            <div class="stat-lbl">Samples</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-val" id="review-sample-rate">–</div>
-            <div class="stat-lbl">Sample rate</div>
-          </div>
-        </div>
-
-        <!-- 3D flip animation -->
-        <div id="anim-container">
-          <canvas id="anim-canvas" aria-label="3D flip animation"></canvas>
-          <div id="anim-controls">
-            <button id="anim-play" class="anim-btn" aria-label="Play/Pause">
-              ▶
-            </button>
-            <input
-              id="anim-scrubber"
-              type="range"
-              min="0"
-              max="100"
-              value="0"
-              step="0.1"
-            />
-            <span id="anim-time">0.00s</span>
-            <select id="anim-speed">
-              <option value="0.25">0.25x</option>
-              <option value="0.5" selected>0.5x</option>
-              <option value="1">1x</option>
-              <option value="2">2x</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="review-actions">
-          <button id="btn-discard">❌ Discard</button>
-          <button id="btn-save">✅ Save</button>
-        </div>
+    <div class="login-title">Lab</div>
+    <form id="login-form">
+      <div class="form-row">
+        <label for="u">Username</label>
+        <input id="u" type="text" name="username" autocomplete="username" required autofocus>
       </div>
-    </div>
-    <!-- ════════════════ END REVIEW OVERLAY ════════════════ -->
-
-    <!-- Toast notification -->
-    <div id="toast" role="status" aria-live="polite"></div>
-
-    <!-- ════════════════ SETUP MODAL ════════════════ -->
-    <div
-      id="setup-modal"
-      class="modal-overlay hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="setup-heading"
-    >
-      <div class="modal-sheet">
-        <h2 id="setup-heading">🔑 Enter API Key</h2>
-        <p class="modal-desc">Enter your API key to start collecting flips.</p>
-        <p class="modal-disclaimer">
-          ⚠️ By using this app you agree that you throw your phone at your own
-          risk. We are not responsible for any damage to your device. Collected
-          sensor data is stored on our server for research purposes.
-        </p>
-
-        <div class="modal-field">
-          <label for="setup-api-key">API Key</label>
-          <input
-            type="text"
-            id="setup-api-key"
-            placeholder="fp_…"
-            autocomplete="off"
-            spellcheck="false"
-            autocorrect="off"
-            autocapitalize="none"
-          />
-        </div>
-
-        <p id="setup-error" class="setup-error" role="alert"></p>
-
-        <div class="modal-actions">
-          <button id="setup-cancel-btn" class="modal-cancel-btn">Cancel</button>
-          <button id="setup-submit-btn" class="modal-submit-btn">
-            Connect
-          </button>
-        </div>
+      <div class="form-row">
+        <label for="p">Password</label>
+        <input id="p" type="password" name="password" autocomplete="current-password" required>
       </div>
-    </div>
-    <!-- ════════════════ END SETUP MODAL ════════════════ -->
+      <div class="form-row" style="margin-top:20px">
+        <button type="submit" class="btn btn-full">Sign in</button>
+      </div>
+      <div id="login-error" class="error-msg"></div>
+    </form>
+  </div>
+</div>
 
-    <script src="/static/lab/app.js"></script>
-  </body>
+<!-- App -->
+<div id="app">
+  <header class="header">
+    <a class="wordmark" href="/lab/">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+      <span class="wordmark-label">Lab</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/lab/" class="active">Recordings</a>
+      <a href="/lab/record">Record</a>
+      <a href="/lab/playground">Playground</a>
+    </nav>
+    <div class="header-right">
+      <span id="logged-in-as"></span>
+      <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="page-heading">
+      Recordings
+      <select id="trick-filter" class="trick-filter" style="margin-left:16px;font-size:0.82rem;padding:4px 8px;border:1.5px solid var(--border);background:var(--bg);cursor:pointer;">
+        <option value="">All tricks</option>
+      </select>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Trick</th>
+          <th>Collector</th>
+          <th>Duration</th>
+          <th>Samples</th>
+          <th>Date</th>
+          <th style="width:52px">Ref</th>
+          <th style="width:80px"></th>
+        </tr>
+      </thead>
+      <tbody id="rec-tbody">
+        <tr><td colspan="7" class="table-msg">Loading…</td></tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<script>
+const TOKEN_KEY = 'fp_game_token';
+let allRecordings = [];
+let refByTrick = {};   // trick → recording_id
+
+function token() { return localStorage.getItem(TOKEN_KEY); }
+
+function showLogin(err) {
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  if (err) document.getElementById('login-error').textContent = err;
+}
+
+function showApp(username) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  if (username) document.getElementById('logged-in-as').textContent = username;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function fmtDuration(ms) {
+  return (ms / 1000).toFixed(2) + 's';
+}
+
+function fmtDate(iso) {
+  return iso ? iso.replace('T', ' ').slice(0, 16) : '';
+}
+
+function populateTrickFilter(recordings) {
+  const sel = document.getElementById('trick-filter');
+  const tricks = [...new Set(recordings.map(r => r.trick))].sort();
+  tricks.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    sel.appendChild(opt);
+  });
+}
+
+function renderTable(recordings) {
+  const tbody = document.getElementById('rec-tbody');
+  if (!recordings.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="table-msg">No recordings.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = recordings.map(r => {
+    const isRef = refByTrick[r.trick] === r.id;
+    const refBtn = isRef
+      ? `<button class="btn btn-sm ref-btn" data-id="${esc(r.id)}" data-trick="${esc(r.trick)}" data-is-ref="1" title="Remove reference">★</button>`
+      : `<button class="btn btn-sm btn-ghost ref-btn" data-id="${esc(r.id)}" data-trick="${esc(r.trick)}" data-is-ref="0" title="Set as reference">☆</button>`;
+    return `
+    <tr data-id="${esc(r.id)}">
+      <td><strong>${esc(r.trick)}</strong></td>
+      <td>${esc(r.collector || '—')}</td>
+      <td>${fmtDuration(r.duration_ms)}</td>
+      <td>${r.sample_count}</td>
+      <td>${fmtDate(r.created_at)}</td>
+      <td>${refBtn}</td>
+      <td>
+        <button class="btn btn-sm btn-danger delete-btn" data-id="${esc(r.id)}">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteRecording(btn.dataset.id, btn));
+  });
+  tbody.querySelectorAll('.ref-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleRef(btn));
+  });
+}
+
+function applyFilter() {
+  const trick = document.getElementById('trick-filter').value;
+  renderTable(trick ? allRecordings.filter(r => r.trick === trick) : allRecordings);
+}
+
+async function toggleRef(btn) {
+  const { id, trick } = btn.dataset;
+  const isRef = btn.dataset.isRef === '1';
+  btn.disabled = true;
+  if (isRef) {
+    const r = await fetch(`/lab/api/references/${encodeURIComponent(trick)}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + token() },
+    }).catch(() => null);
+    if (r && r.ok) {
+      delete refByTrick[trick];
+      applyFilter();
+    }
+  } else {
+    const r = await fetch(`/lab/api/references/${encodeURIComponent(trick)}`, {
+      method: 'PUT',
+      headers: { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recording_id: id }),
+    }).catch(() => null);
+    if (r && r.ok) {
+      refByTrick[trick] = id;
+      applyFilter();
+    }
+  }
+  btn.disabled = false;
+}
+
+async function deleteRecording(id, btn) {
+  if (!confirm('Delete this recording?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/lab/api/recordings/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: 'Bearer ' + token() },
+  }).catch(() => null);
+
+  if (r && r.ok) {
+    allRecordings = allRecordings.filter(rec => rec.id !== id);
+    applyFilter();
+  } else {
+    btn.disabled = false;
+    alert('Delete failed.');
+  }
+}
+
+async function loadRecordings() {
+  const headers = { Authorization: 'Bearer ' + token() };
+  const [recResp, refResp] = await Promise.all([
+    fetch('/lab/api/recordings', { headers }).catch(() => null),
+    fetch('/lab/api/references',  { headers }).catch(() => null),
+  ]);
+
+  if (!recResp) {
+    document.getElementById('rec-tbody').innerHTML =
+      '<tr><td colspan="7" class="table-msg" style="color:var(--danger)">Network error.</td></tr>';
+    return;
+  }
+  if (recResp.status === 401 || recResp.status === 403) {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin('Session expired. Please sign in again.');
+    return;
+  }
+  if (!recResp.ok) {
+    document.getElementById('rec-tbody').innerHTML =
+      '<tr><td colspan="7" class="table-msg" style="color:var(--danger)">Failed to load recordings.</td></tr>';
+    return;
+  }
+
+  if (refResp && refResp.ok) {
+    const refs = await refResp.json();
+    refByTrick = Object.fromEntries(Object.entries(refs).map(([t, r]) => [t, r.id]));
+  }
+
+  allRecordings = await recResp.json();
+  populateTrickFilter(allRecordings);
+  renderTable(allRecordings);
+}
+
+async function checkAuth() {
+  const t = token();
+  if (!t) { showLogin(); return; }
+
+  const r = await fetch('/game/api/auth/me', {
+    headers: { Authorization: 'Bearer ' + t },
+  }).catch(() => null);
+
+  if (!r || !r.ok) {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+    return;
+  }
+
+  const me = await r.json();
+  if (me.role !== 'lab' && me.role !== 'admin') {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin('Account does not have Lab access.');
+    return;
+  }
+
+  showApp(me.username);
+  loadRecordings();
+}
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+
+  const fd = new FormData(e.target);
+  const r = await fetch('/game/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
+  }).catch(() => null);
+
+  if (!r) { errEl.textContent = 'Network error.'; return; }
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error || 'Login failed.'; return; }
+
+  const me = data.user;
+  if (me.role !== 'lab' && me.role !== 'admin') {
+    errEl.textContent = 'Account does not have Lab access.';
+    return;
+  }
+
+  localStorage.setItem(TOKEN_KEY, data.token);
+  showApp(me.username);
+  loadRecordings();
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  const t = token();
+  if (t) {
+    await fetch('/game/api/auth/logout', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + t },
+    }).catch(() => {});
+    localStorage.removeItem(TOKEN_KEY);
+  }
+  showLogin();
+});
+
+document.getElementById('trick-filter').addEventListener('change', applyFilter);
+
+checkAuth();
+</script>
+</body>
 </html>

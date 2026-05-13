@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff">
+  <title>Record — Lab — flipPhone</title>
+  <style>
+    :root {
+      --bg:     #ffffff;
+      --text:   #111111;
+      --dim:    #888888;
+      --border: #111111;
+      --accent: #1a4fd6;
+      --danger: #cc0000;
+      --font:   'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); }
+
+    /* ── Header ── */
+    .header {
+      display: flex; align-items: center; height: 48px;
+      border-bottom: 1.5px solid var(--border);
+    }
+    .wordmark {
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none; color: var(--text);
+      padding: 0 16px; height: 100%;
+      border-right: 1.5px solid var(--border);
+    }
+    .wordmark img { height: 22px; }
+    .wordmark-label { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+    .nav-links { display: flex; height: 100%; flex: 1; }
+    .nav-links a {
+      text-decoration: none; color: var(--dim);
+      font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+      text-transform: uppercase; padding: 0 14px;
+      display: flex; align-items: center;
+      border-right: 1.5px solid var(--border);
+    }
+    .nav-links a.active { color: var(--text); }
+    .nav-links a:active { background: #f0f0f0; }
+    .header-right { padding: 0 14px; font-size: 12px; color: var(--dim); }
+
+    /* ── Hint / permission ── */
+    .hint-bar {
+      padding: 12px 16px;
+      border-bottom: 1.5px solid var(--border);
+      background: #f8f8f8;
+      font-size: 13px; color: var(--dim); line-height: 1.5;
+    }
+    .hint-bar.hidden { display: none; }
+    .perm-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 16px; border-bottom: 1.5px solid var(--border);
+      background: #f8f8f8; font-size: 13px;
+    }
+    .perm-bar.hidden { display: none; }
+    .perm-btn {
+      background: var(--text); color: var(--bg); border: none;
+      font-family: var(--font); font-size: 12px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 7px 14px; cursor: pointer; flex-shrink: 0;
+    }
+
+    /* ── Trick grid ── */
+    .trick-grid-wrap {
+      border-bottom: 1.5px solid var(--border);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .trick-grid {
+      display: flex; gap: 0; padding: 0;
+      min-width: max-content;
+    }
+    .trick-btn {
+      background: var(--bg); color: var(--dim); border: none;
+      border-right: 1.5px solid var(--border);
+      font-family: var(--font); font-size: 12px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 12px 18px; cursor: pointer; white-space: nowrap;
+    }
+    .trick-btn:last-child { border-right: none; }
+    .trick-btn.selected { color: var(--text); background: #f0f0f0; }
+    .trick-btn:active { background: #e8e8e8; }
+
+    /* ── Reference card ── */
+    .ref-card {
+      border-bottom: 1.5px solid var(--border);
+      background: #f8f8f8;
+    }
+    .ref-card.hidden { display: none; }
+    .ref-label {
+      padding: 8px 16px 0;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--dim);
+    }
+    .ref-canvas {
+      display: block; width: 100%;
+      background: #111;
+      aspect-ratio: 16 / 7;
+    }
+
+    /* ── Record area ── */
+    .record-area {
+      max-width: 480px; margin: 0 auto;
+      padding: 28px 16px 0;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+    }
+    .selected-trick-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--dim);
+    }
+    .selected-trick {
+      font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px;
+    }
+    .timer {
+      font-size: 3.8rem; font-weight: 700; letter-spacing: -2px;
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .timer.recording { color: var(--danger); }
+    .record-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; max-width: 320px; padding: 22px;
+      background: var(--text); color: var(--bg); border: none;
+      font-family: var(--font); font-size: 1.15rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      cursor: pointer; user-select: none;
+    }
+    .record-btn:active { background: #333; }
+    .record-btn.recording { background: var(--danger); }
+    .status-msg {
+      font-size: 12px; color: var(--dim); text-align: center; min-height: 16px;
+    }
+
+    /* ── Review overlay ── */
+    .review-overlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      z-index: 100; overflow-y: auto;
+    }
+    .review-overlay.hidden { display: none; }
+
+    .review-header {
+      padding: 20px 16px 16px;
+      border-bottom: 1.5px solid var(--border);
+    }
+    .review-trick { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; }
+    .review-meta  { font-size: 12px; color: var(--dim); margin-top: 2px; }
+
+    .anim-canvas {
+      width: 100%; max-height: 280px;
+      background: #111; display: block;
+      aspect-ratio: 4 / 3;
+    }
+
+    .anim-controls {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-bottom: 1.5px solid var(--border);
+    }
+    .anim-play-btn {
+      background: none; border: 1.5px solid var(--border);
+      font-size: 14px; width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .anim-scrubber { flex: 1; accent-color: var(--accent); }
+    .anim-time { font-size: 12px; color: var(--dim); min-width: 44px; text-align: right; }
+    .anim-speed {
+      background: var(--bg); border: 1.5px solid var(--border);
+      font-family: var(--font); font-size: 12px; padding: 4px 6px; cursor: pointer;
+    }
+
+    .review-actions {
+      display: grid; grid-template-columns: 1fr 1fr;
+      border-top: 1.5px solid var(--border);
+      margin-top: auto;
+    }
+    .review-actions button {
+      padding: 20px; border: none; font-family: var(--font);
+      font-size: 1rem; font-weight: 700; letter-spacing: 0.04em;
+      text-transform: uppercase; cursor: pointer;
+    }
+    #btn-discard { background: #f0f0f0; color: var(--text); border-right: 1.5px solid var(--border); }
+    #btn-discard:active { background: #e0e0e0; }
+    #btn-save { background: var(--text); color: var(--bg); }
+    #btn-save:active { background: #333; }
+    #btn-save:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: var(--text); color: var(--bg);
+      padding: 9px 20px; font-size: 13px;
+      opacity: 0; transition: opacity 0.25s;
+      pointer-events: none; z-index: 200; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <a class="wordmark" href="/lab/">
+    <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    <span class="wordmark-label">Lab</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/lab/">Recordings</a>
+    <a href="/lab/record" class="active">Record</a>
+    <a href="/lab/playground">Playground</a>
+  </nav>
+  <div class="header-right" id="logged-in-as"></div>
+</header>
+
+<div id="sensor-hint" class="hint-bar hidden">
+  This feature requires a phone with motion sensors. Open this page on your phone.
+</div>
+<div id="perm-banner" class="perm-bar hidden">
+  <span>Motion sensor access required.</span>
+  <button id="perm-btn" class="perm-btn">Enable Sensors</button>
+</div>
+
+<div class="trick-grid-wrap">
+  <div class="trick-grid" id="trick-grid"></div>
+</div>
+
+<div id="ref-card" class="ref-card hidden">
+  <div class="ref-label">Reference · <span id="ref-trick-label"></span></div>
+  <canvas id="ref-canvas" class="ref-canvas"></canvas>
+</div>
+
+<div class="record-area">
+  <div class="selected-trick-label">Selected trick</div>
+  <div class="selected-trick" id="selected-trick">—</div>
+  <div class="timer" id="timer-display">0:00.0</div>
+  <button class="record-btn" id="record-btn">
+    <span class="btn-icon">⏺</span>
+    <span class="btn-label">Record</span>
+  </button>
+  <p class="status-msg" id="status-msg">Initializing sensors…</p>
+</div>
+
+<!-- Review overlay -->
+<div id="review-overlay" class="review-overlay hidden">
+  <div class="review-header">
+    <div class="review-trick" id="review-trick"></div>
+    <div class="review-meta"  id="review-meta"></div>
+  </div>
+  <canvas id="anim-canvas" class="anim-canvas"></canvas>
+  <div class="anim-controls">
+    <button id="anim-play" class="anim-play-btn">▶</button>
+    <input  id="anim-scrubber" class="anim-scrubber" type="range" min="0" max="100" value="0">
+    <span   id="anim-time"  class="anim-time">0.00s</span>
+    <select id="anim-speed" class="anim-speed">
+      <option value="0.25">0.25×</option>
+      <option value="0.5" selected>0.5×</option>
+      <option value="1">1×</option>
+    </select>
+  </div>
+  <div class="review-actions">
+    <button id="btn-discard">Discard</button>
+    <button id="btn-save">Save</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(async function checkAuth() {
+  const t = localStorage.getItem('fp_game_token');
+  if (!t) { window.location.replace('/lab/'); return; }
+  const r = await fetch('/game/api/auth/me', {
+    headers: { Authorization: 'Bearer ' + t },
+  }).catch(() => null);
+  if (!r || !r.ok) { window.location.replace('/lab/'); return; }
+  const me = await r.json();
+  if (me.role !== 'lab' && me.role !== 'admin') { window.location.replace('/lab/'); return; }
+  document.getElementById('logged-in-as').textContent = me.username;
+})();
+</script>
+<script src="/static/lab/recorder.js"></script>
+
+</body>
+</html>

@@ -6,15 +6,52 @@ Mounted at /admin.
 import csv
 import io
 import json
+import os
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 
-from flask import Blueprint, g, jsonify, request, send_file
+from flask import Blueprint, Response, jsonify, render_template, request, send_file
 
 from database import (
-    generate_key, get_db, now_iso, require_admin, require_api_key, row_to_dict,
+    generate_key, get_db, now_iso, require_admin, row_to_dict,
 )
 
 admin = Blueprint('admin', __name__, url_prefix='/admin')
+
+PREDICTION_API_URL = os.environ.get('PREDICTION_API_URL', 'http://localhost:8000')
+
+
+def _ml_proxy(method, path, body=None):
+    """Forward a request to the ML backend, pass response or 502 on failure."""
+    target = PREDICTION_API_URL.rstrip('/') + path
+    headers = {'Content-Type': 'application/json'} if body is not None else {}
+    req = urllib.request.Request(target, data=body, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return Response(resp.read(), status=resp.status, mimetype='application/json')
+    except urllib.error.HTTPError as e:
+        return Response(e.read(), status=e.code, mimetype='application/json')
+    except Exception as e:
+        return jsonify({'error': f'ML backend unavailable: {str(e)}'}), 502
+
+
+# ──────────────────────────────────────────────
+# HTML pages (auth handled client-side)
+# ──────────────────────────────────────────────
+@admin.route('/')
+def index():
+    return render_template('admin/index.html')
+
+
+@admin.route('/users')
+def users_page():
+    return render_template('admin/users.html')
+
+
+@admin.route('/embed')
+def embed_page():
+    return render_template('admin/embed.html')
 
 
 # ──────────────────────────────────────────────
@@ -26,10 +63,135 @@ def options_handler(_path):
 
 
 # ──────────────────────────────────────────────
+# /admin/api/users
+# ──────────────────────────────────────────────
+@admin.route('/api/users', methods=['GET'])
+@require_admin
+def list_users():
+    rows = get_db().execute(
+        '''SELECT id, username, display_name, role, created_at,
+                  tricks_landed, games_won, games_lost
+           FROM game_users ORDER BY id'''
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@admin.route('/api/users/<int:user_id>/role', methods=['POST'])
+@require_admin
+def set_user_role(user_id):
+    data = request.get_json(silent=True) or {}
+    role = data.get('role')
+    if role is not None and role not in ('lab', 'admin'):
+        return jsonify({'error': 'role must be null, "lab", or "admin"'}), 400
+    db = get_db()
+    result = db.execute('UPDATE game_users SET role = ? WHERE id = ?', (role, user_id))
+    db.commit()
+    if result.rowcount == 0:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify({'id': user_id, 'role': role})
+
+
+# ──────────────────────────────────────────────
+# /admin/api/embeddings
+# ──────────────────────────────────────────────
+@admin.route('/api/embeddings')
+@require_admin
+def get_embeddings():
+    db = get_db()
+    rows = db.execute(
+        '''SELECT r.id, r.trick, r.samples, r.duration_ms, r.sample_count,
+                  COALESCE(k.name, u.username) AS collector
+           FROM recordings r
+           LEFT JOIN api_keys k ON r.key_id = k.id
+           LEFT JOIN game_users u ON r.user_id = u.id
+           ORDER BY r.created_at DESC'''
+    ).fetchall()
+
+    meta = {}
+    payload = []
+    for row in rows:
+        try:
+            samples = json.loads(row['samples'])
+        except Exception:
+            continue
+        if not samples:
+            continue
+        meta[row['id']] = {
+            'trick':        row['trick'],
+            'collector':    row['collector'],
+            'duration_ms':  row['duration_ms'],
+            'sample_count': row['sample_count'],
+        }
+        payload.append({'id': row['id'], 'samples': samples})
+
+    if not payload:
+        return jsonify([])
+
+    target = PREDICTION_API_URL.rstrip('/') + '/batch_embed'
+    body   = json.dumps({'recordings': payload}).encode()
+    req    = urllib.request.Request(
+        target, data=body,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            embed_list = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return jsonify({'error': f'ML backend error: {e.code}'}), 502
+    except Exception as e:
+        return jsonify({'error': f'ML backend unavailable: {str(e)}'}), 502
+
+    result = []
+    for entry in embed_list:
+        rec_id = entry.get('id')
+        if rec_id not in meta or entry.get('x') is None:
+            continue
+        result.append({'id': rec_id, 'x': entry['x'], 'y': entry['y'],
+                        'z': entry.get('z'), **meta[rec_id]})
+    return jsonify(result)
+
+
+# ──────────────────────────────────────────────
+# /admin/api/train  (proxy → ML backend)
+# ──────────────────────────────────────────────
+@admin.route('/api/train', methods=['POST'])
+@require_admin
+def start_training():
+    return _ml_proxy('POST', '/train', body=request.get_data() or b'{}')
+
+
+@admin.route('/api/train/<job_id>', methods=['GET'])
+@require_admin
+def training_status(job_id):
+    return _ml_proxy('GET', f'/train/{job_id}')
+
+
+# ──────────────────────────────────────────────
+# /admin/api/models  (proxy → ML backend)
+# ──────────────────────────────────────────────
+@admin.route('/api/models', methods=['GET'])
+@require_admin
+def list_models():
+    return _ml_proxy('GET', '/models')
+
+
+@admin.route('/api/models/<model_id>/activate', methods=['POST'])
+@require_admin
+def activate_model(model_id):
+    return _ml_proxy('POST', f'/models/{model_id}/activate', body=b'{}')
+
+
+@admin.route('/api/models/<model_id>/metrics', methods=['GET'])
+@require_admin
+def model_metrics(model_id):
+    return _ml_proxy('GET', f'/models/{model_id}/metrics')
+
+
+# ──────────────────────────────────────────────
 # /admin/api/keys
 # ──────────────────────────────────────────────
 @admin.route('/api/keys', methods=['GET'])
-@require_api_key
 @require_admin
 def list_keys():
     rows = get_db().execute(
@@ -41,7 +203,6 @@ def list_keys():
 
 
 @admin.route('/api/keys', methods=['POST'])
-@require_api_key
 @require_admin
 def create_key():
     data = request.get_json(silent=True) or {}
@@ -60,11 +221,8 @@ def create_key():
 
 
 @admin.route('/api/keys/<int:key_id>', methods=['DELETE'])
-@require_api_key
 @require_admin
 def revoke_key(key_id):
-    if key_id == g.key_row['id']:
-        return jsonify({'error': 'Cannot revoke your own key'}), 400
     db = get_db()
     result = db.execute('DELETE FROM api_keys WHERE id = ?', (key_id,))
     db.commit()
@@ -77,7 +235,6 @@ def revoke_key(key_id):
 # /admin/api/tricks
 # ──────────────────────────────────────────────
 @admin.route('/api/tricks', methods=['POST'])
-@require_api_key
 @require_admin
 def create_trick():
     data = request.get_json(silent=True) or {}
@@ -99,7 +256,6 @@ def create_trick():
 
 
 @admin.route('/api/tricks/<trick_id>', methods=['DELETE'])
-@require_api_key
 @require_admin
 def delete_trick(trick_id):
     db = get_db()
@@ -115,15 +271,15 @@ def delete_trick(trick_id):
 # ──────────────────────────────────────────────
 def _get_export_rows(db):
     return db.execute(
-        '''SELECT r.*, k.name AS collector
+        '''SELECT r.*, COALESCE(k.name, u.username) AS collector
            FROM recordings r
-           JOIN api_keys k ON r.key_id = k.id
+           LEFT JOIN api_keys k ON r.key_id = k.id
+           LEFT JOIN game_users u ON r.user_id = u.id
            ORDER BY r.created_at DESC'''
     ).fetchall()
 
 
 @admin.route('/api/export/json')
-@require_api_key
 @require_admin
 def export_json():
     rows = _get_export_rows(get_db())
@@ -143,7 +299,6 @@ def export_json():
 
 
 @admin.route('/api/export/csv')
-@require_api_key
 @require_admin
 def export_csv():
     rows = _get_export_rows(get_db())

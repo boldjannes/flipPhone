@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024">
+  <title>Users — Admin — flipPhone</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    </div>
+    <div class="login-title">Admin Panel</div>
+    <form id="login-form">
+      <div class="form-row">
+        <label for="u">Username</label>
+        <input id="u" type="text" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="form-row">
+        <label for="p">Password</label>
+        <input id="p" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div class="form-row" style="margin-top:20px">
+        <button type="submit" class="btn btn-full">Sign in</button>
+      </div>
+      <div id="login-error" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header class="header">
+    <a class="wordmark" href="/admin/">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+      <span class="wordmark-label">Admin</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/admin/">Dashboard</a>
+      <a href="/admin/users" class="active">Users</a>
+      <a href="#" class="disabled" style="color:var(--border-light)">Models</a>
+      <a href="/admin/embed">Embeddings</a>
+    </nav>
+    <div class="header-right">
+      <span id="logged-in-as"></span>
+      <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="page-heading">Users</div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th class="cell-id">ID</th>
+          <th>Username</th>
+          <th>Display Name</th>
+          <th>Role</th>
+          <th>Tricks</th>
+          <th>W / L</th>
+          <th style="min-width:160px">Set Role</th>
+        </tr>
+      </thead>
+      <tbody id="user-tbody">
+        <tr><td colspan="7" class="table-msg">Loading…</td></tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<script>
+const TOKEN_KEY = 'fp_game_token';
+
+function token() { return localStorage.getItem(TOKEN_KEY); }
+
+function showLogin(err) {
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  if (err) document.getElementById('login-error').textContent = err;
+}
+
+function showApp(username) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  if (username) document.getElementById('logged-in-as').textContent = username;
+}
+
+async function verifyAdmin(t) {
+  const r = await fetch('/admin/api/users', {
+    headers: { Authorization: 'Bearer ' + t },
+  }).catch(() => null);
+  return r && r.ok ? r : null;
+}
+
+function roleBadge(role) {
+  if (role === 'admin') return '<span class="badge badge-admin">admin</span>';
+  if (role === 'lab')   return '<span class="badge badge-lab">lab</span>';
+  return '<span class="badge badge-none">—</span>';
+}
+
+function renderUsers(users) {
+  const tbody = document.getElementById('user-tbody');
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="table-msg">No users yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr data-id="${u.id}">
+      <td class="cell-id">${u.id}</td>
+      <td class="cell-username">${esc(u.username)}</td>
+      <td class="cell-display">${esc(u.display_name || '')}</td>
+      <td class="cell-role">${roleBadge(u.role)}</td>
+      <td>${u.tricks_landed ?? 0}</td>
+      <td>${u.games_won ?? 0} / ${u.games_lost ?? 0}</td>
+      <td class="cell-actions">
+        <select class="role-select" data-user-id="${u.id}" data-current="${u.role || ''}">
+          <option value=""  ${!u.role           ? 'selected' : ''}>(none)</option>
+          <option value="lab"   ${u.role==='lab'   ? 'selected' : ''}>lab</option>
+          <option value="admin" ${u.role==='admin' ? 'selected' : ''}>admin</option>
+        </select>
+        <span class="save-indicator" id="ind-${u.id}"></span>
+      </td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('.role-select').forEach(sel => {
+    sel.addEventListener('change', () => setRole(sel));
+  });
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function setRole(sel) {
+  const userId = sel.dataset.userId;
+  const role = sel.value || null;
+  const ind = document.getElementById('ind-' + userId);
+  sel.disabled = true;
+  ind.textContent = '';
+
+  const r = await fetch(`/admin/api/users/${userId}/role`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + token(),
+    },
+    body: JSON.stringify({ role }),
+  }).catch(() => null);
+
+  sel.disabled = false;
+
+  if (r && r.ok) {
+    ind.className = 'save-indicator save-ok';
+    ind.textContent = '✓';
+    // update badge in same row
+    const row = sel.closest('tr');
+    row.querySelector('.cell-role').innerHTML = roleBadge(role);
+    sel.dataset.current = role || '';
+    setTimeout(() => { ind.textContent = ''; }, 2000);
+  } else {
+    ind.className = 'save-indicator save-err';
+    ind.textContent = '✗';
+    sel.value = sel.dataset.current;
+    setTimeout(() => { ind.textContent = ''; }, 3000);
+  }
+}
+
+async function loadUsers() {
+  const t = token();
+  const r = await fetch('/admin/api/users', {
+    headers: { Authorization: 'Bearer ' + t },
+  }).catch(() => null);
+  if (r && r.ok) {
+    renderUsers(await r.json());
+  } else {
+    document.getElementById('user-tbody').innerHTML =
+      '<tr><td colspan="7" class="table-msg" style="color:var(--danger)">Failed to load users.</td></tr>';
+  }
+}
+
+async function checkAuth() {
+  const t = token();
+  if (!t) { showLogin(); return; }
+  const r = await verifyAdmin(t);
+  if (r) {
+    const me = await fetch('/game/api/auth/me', {
+      headers: { Authorization: 'Bearer ' + t },
+    }).catch(() => null);
+    const username = (me && me.ok) ? (await me.json()).username : '';
+    showApp(username);
+    renderUsers(await r.json());
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+  }
+}
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+
+  const fd = new FormData(e.target);
+  const r = await fetch('/game/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
+  }).catch(() => null);
+
+  if (!r) { errEl.textContent = 'Network error.'; return; }
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error || 'Login failed.'; return; }
+
+  localStorage.setItem(TOKEN_KEY, data.token);
+  const verify = await verifyAdmin(data.token);
+  if (verify) {
+    showApp(data.user && data.user.username);
+    renderUsers(await verify.json());
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    errEl.textContent = 'Account does not have admin access.';
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  const t = token();
+  if (t) {
+    await fetch('/game/api/auth/logout', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + t },
+    }).catch(() => {});
+    localStorage.removeItem(TOKEN_KEY);
+  }
+  showLogin();
+});
+
+checkAuth();
+</script>
+</body>
+</html>

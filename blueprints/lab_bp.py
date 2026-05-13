@@ -1,40 +1,33 @@
 """
-Lab blueprint – recording, dataset, references, playground.
+Lab blueprint – recording collection viewer.
 Mounted at /lab.
 """
 
 import json
-import os
-import urllib.error
-import urllib.request
 
 from flask import Blueprint, g, jsonify, render_template, request
 
-from database import (
-    get_db, now_iso, require_admin, require_api_key, row_to_dict,
-)
+from database import get_db, now_iso, require_lab
 
 lab = Blueprint('lab', __name__, url_prefix='/lab')
 
-PREDICTION_API_URL = os.environ.get('PREDICTION_API_URL', 'http://localhost:8000')
-
 
 # ──────────────────────────────────────────────
-# Frontend pages
+# HTML page
 # ──────────────────────────────────────────────
 @lab.route('/')
 def index():
     return render_template('lab/index.html')
 
 
+@lab.route('/record')
+def record():
+    return render_template('lab/record.html')
+
+
 @lab.route('/playground')
 def playground():
     return render_template('lab/playground.html')
-
-
-@lab.route('/embed')
-def embed():
-    return render_template('lab/embed.html')
 
 
 # ──────────────────────────────────────────────
@@ -46,22 +39,10 @@ def options_handler(_path):
 
 
 # ──────────────────────────────────────────────
-# /lab/api/me
-# ──────────────────────────────────────────────
-@lab.route('/api/me')
-@require_api_key
-def me():
-    return jsonify({
-        'name': g.key_row['name'],
-        'is_admin': bool(g.key_row['is_admin']),
-    })
-
-
-# ──────────────────────────────────────────────
 # /lab/api/recordings
 # ──────────────────────────────────────────────
 @lab.route('/api/recordings', methods=['POST'])
-@require_api_key
+@require_lab
 def save_recording():
     data = request.get_json(silent=True)
     if not data:
@@ -80,12 +61,12 @@ def save_recording():
     try:
         db.execute(
             '''INSERT INTO recordings
-               (id, key_id, trick, timestamp, duration_ms,
+               (id, user_id, trick, timestamp, duration_ms,
                 sample_count, sample_rate_hz, samples, source, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (
                 str(data['id']),
-                g.key_row['id'],
+                g.game_user['uid'],
                 str(data['trick'])[:64],
                 str(data['timestamp']),
                 int(data['durationMs']),
@@ -104,39 +85,42 @@ def save_recording():
 
 
 @lab.route('/api/recordings', methods=['GET'])
-@require_api_key
+@require_lab
 def list_recordings():
     db = get_db()
-    if g.key_row['is_admin']:
+    if g.game_user['role'] == 'admin':
         rows = db.execute(
-            '''SELECT r.*, k.name AS collector
+            '''SELECT r.id, r.trick, r.duration_ms, r.sample_count, r.created_at,
+                      COALESCE(k.name, u.username) AS collector
                FROM recordings r
-               JOIN api_keys k ON r.key_id = k.id
+               LEFT JOIN api_keys k ON r.key_id = k.id
+               LEFT JOIN game_users u ON r.user_id = u.id
                ORDER BY r.created_at DESC'''
         ).fetchall()
     else:
         rows = db.execute(
-            '''SELECT r.*, k.name AS collector
+            '''SELECT r.id, r.trick, r.duration_ms, r.sample_count, r.created_at,
+                      COALESCE(k.name, u.username) AS collector
                FROM recordings r
-               JOIN api_keys k ON r.key_id = k.id
-               WHERE r.key_id = ?
+               LEFT JOIN api_keys k ON r.key_id = k.id
+               LEFT JOIN game_users u ON r.user_id = u.id
+               WHERE r.user_id = ?
                ORDER BY r.created_at DESC''',
-            (g.key_row['id'],),
+            (g.game_user['uid'],),
         ).fetchall()
-
-    return jsonify([row_to_dict(r) for r in rows])
+    return jsonify([dict(r) for r in rows])
 
 
 @lab.route('/api/recordings/<rec_id>', methods=['DELETE'])
-@require_api_key
+@require_lab
 def delete_recording(rec_id):
     db = get_db()
-    if g.key_row['is_admin']:
+    if g.game_user['role'] == 'admin':
         result = db.execute('DELETE FROM recordings WHERE id = ?', (rec_id,))
     else:
         result = db.execute(
-            'DELETE FROM recordings WHERE id = ? AND key_id = ?',
-            (rec_id, g.key_row['id']),
+            'DELETE FROM recordings WHERE id = ? AND user_id = ?',
+            (rec_id, g.game_user['uid']),
         )
     db.commit()
     if result.rowcount == 0:
@@ -145,183 +129,59 @@ def delete_recording(rec_id):
 
 
 # ──────────────────────────────────────────────
-# /lab/api/stats
-# ──────────────────────────────────────────────
-@lab.route('/api/stats')
-@require_api_key
-def user_stats():
-    db = get_db()
-    if g.key_row['is_admin']:
-        rows = db.execute(
-            '''SELECT trick, COUNT(*) AS count
-               FROM recordings
-               GROUP BY trick
-               ORDER BY count DESC'''
-        ).fetchall()
-        total = db.execute('SELECT COUNT(*) FROM recordings').fetchone()[0]
-    else:
-        rows = db.execute(
-            '''SELECT trick, COUNT(*) AS count
-               FROM recordings
-               WHERE key_id = ?
-               GROUP BY trick
-               ORDER BY count DESC''',
-            (g.key_row['id'],),
-        ).fetchall()
-        total = db.execute(
-            'SELECT COUNT(*) FROM recordings WHERE key_id = ?',
-            (g.key_row['id'],),
-        ).fetchone()[0]
-
-    result = {
-        'total': total,
-        'by_trick': [{'trick': r['trick'], 'count': r['count']} for r in rows],
-    }
-
-    if g.key_row['is_admin']:
-        collector_rows = db.execute(
-            '''SELECT k.name AS collector, COUNT(*) AS count
-               FROM recordings r
-               JOIN api_keys k ON r.key_id = k.id
-               GROUP BY r.key_id
-               ORDER BY count DESC'''
-        ).fetchall()
-        result['by_collector'] = [
-            {'name': r['collector'], 'count': r['count']} for r in collector_rows
-        ]
-
-    return jsonify(result)
-
-
-# ──────────────────────────────────────────────
 # /lab/api/references
 # ──────────────────────────────────────────────
 @lab.route('/api/references', methods=['GET'])
-@require_api_key
+@require_lab
 def get_references():
     db = get_db()
     rows = db.execute(
-        '''SELECT r.*, k.name AS collector, ref.trick AS ref_trick
-           FROM reference_recordings ref
-           JOIN recordings r ON ref.recording_id = r.id
-           JOIN api_keys k ON r.key_id = k.id'''
+        '''SELECT rr.trick, rr.recording_id, r.samples, r.duration_ms, r.sample_count
+           FROM reference_recordings rr
+           JOIN recordings r ON rr.recording_id = r.id'''
     ).fetchall()
     result = {}
-    for row in rows:
-        result[row['ref_trick']] = row_to_dict(row)
-    return jsonify(result)
-
-
-@lab.route('/api/references/<trick>', methods=['PUT'])
-@require_api_key
-@require_admin
-def set_reference(trick):
-    data = request.get_json(silent=True) or {}
-    recording_id = data.get('recording_id', '')
-    if not recording_id:
-        return jsonify({'error': 'recording_id is required'}), 400
-
-    db = get_db()
-    rec = db.execute('SELECT id FROM recordings WHERE id = ?', (recording_id,)).fetchone()
-    if not rec:
-        return jsonify({'error': 'Recording not found'}), 404
-
-    db.execute(
-        '''INSERT INTO reference_recordings (trick, recording_id, set_at)
-           VALUES (?, ?, ?)
-           ON CONFLICT(trick) DO UPDATE SET recording_id = excluded.recording_id, set_at = excluded.set_at''',
-        (trick, recording_id, now_iso()),
-    )
-    db.commit()
-    return jsonify({'status': 'set', 'trick': trick, 'recording_id': recording_id})
-
-
-@lab.route('/api/references/<trick>', methods=['DELETE'])
-@require_api_key
-@require_admin
-def delete_reference(trick):
-    db = get_db()
-    result = db.execute('DELETE FROM reference_recordings WHERE trick = ?', (trick,))
-    db.commit()
-    if result.rowcount == 0:
-        return jsonify({'error': 'No reference for this trick'}), 404
-    return jsonify({'status': 'removed'})
-
-
-# ──────────────────────────────────────────────
-# /lab/api/embeddings
-# ──────────────────────────────────────────────
-@lab.route('/api/embeddings')
-@require_api_key
-def get_embeddings():
-    """Fetch feature vectors from the ML backend and merge with DB metadata."""
-    db = get_db()
-    if g.key_row['is_admin']:
-        rows = db.execute(
-            '''SELECT r.id, r.trick, r.samples, r.duration_ms, r.sample_count,
-                      k.name AS collector
-               FROM recordings r
-               JOIN api_keys k ON r.key_id = k.id
-               ORDER BY r.created_at DESC'''
-        ).fetchall()
-    else:
-        rows = db.execute(
-            '''SELECT r.id, r.trick, r.samples, r.duration_ms, r.sample_count,
-                      k.name AS collector
-               FROM recordings r
-               JOIN api_keys k ON r.key_id = k.id
-               WHERE r.key_id = ?
-               ORDER BY r.created_at DESC''',
-            (g.key_row['id'],),
-        ).fetchall()
-
-    meta = {}
-    payload_recordings = []
     for row in rows:
         try:
             samples = json.loads(row['samples'])
         except Exception:
             continue
-        if not samples:
-            continue
-        meta[row['id']] = {
-            'trick': row['trick'],
-            'collector': row['collector'],
-            'duration_ms': row['duration_ms'],
+        result[row['trick']] = {
+            'id':           row['recording_id'],
+            'samples':      samples,
+            'duration_ms':  row['duration_ms'],
             'sample_count': row['sample_count'],
         }
-        payload_recordings.append({'id': row['id'], 'samples': samples})
-
-    if not payload_recordings:
-        return jsonify([])
-
-    target = PREDICTION_API_URL.rstrip('/') + '/batch_embed'
-    body = json.dumps({'recordings': payload_recordings}).encode()
-    req = urllib.request.Request(
-        target,
-        data=body,
-        headers={'Content-Type': 'application/json'},
-        method='POST',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            embed_list = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        return jsonify({'error': f'ML backend error: {e.code}'}), 502
-    except Exception as e:
-        return jsonify({'error': f'ML backend unavailable: {e}'}), 502
-
-    result = []
-    for entry in embed_list:
-        rec_id = entry.get('id')
-        if rec_id not in meta or entry.get('x') is None:
-            continue
-        result.append({
-            'id': rec_id,
-            'x': entry['x'],
-            'y': entry['y'],
-            'z': entry['z'],
-            **meta[rec_id],
-        })
-
     return jsonify(result)
+
+
+@lab.route('/api/references/<trick>', methods=['PUT'])
+@require_lab
+def set_reference(trick):
+    data = request.get_json(silent=True) or {}
+    recording_id = data.get('recording_id')
+    if not recording_id:
+        return jsonify({'error': 'recording_id is required'}), 400
+    db = get_db()
+    if not db.execute('SELECT id FROM recordings WHERE id = ?', (recording_id,)).fetchone():
+        return jsonify({'error': 'Recording not found'}), 404
+    db.execute(
+        '''INSERT INTO reference_recordings (trick, recording_id, set_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(trick) DO UPDATE
+             SET recording_id = excluded.recording_id, set_at = excluded.set_at''',
+        (trick, recording_id, now_iso()),
+    )
+    db.commit()
+    return jsonify({'trick': trick, 'recording_id': recording_id})
+
+
+@lab.route('/api/references/<trick>', methods=['DELETE'])
+@require_lab
+def delete_reference(trick):
+    db = get_db()
+    result = db.execute('DELETE FROM reference_recordings WHERE trick = ?', (trick,))
+    db.commit()
+    if result.rowcount == 0:
+        return jsonify({'error': 'Reference not found'}), 404
+    return jsonify({'status': 'deleted'})
