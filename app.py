@@ -217,6 +217,23 @@ def _cli_revoke_key(key_id):
         print(f"Key {key_id} revoked.")
 
 
+def _cli_make_admin(username):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute(
+        'SELECT id, username, role FROM game_users WHERE username = ?', (username,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        print(f"Error: no user '{username}' found.")
+        raise SystemExit(1)
+    conn.execute('UPDATE game_users SET role = ? WHERE username = ?', ('admin', username))
+    conn.commit()
+    conn.close()
+    prev = row[2] or 'none'
+    print(f"'{username}' (id={row[0]}): role {prev} → admin")
+
+
 # ──────────────────────────────────────────────
 # Entry point
 # ──────────────────────────────────────────────
@@ -233,6 +250,9 @@ if __name__ == '__main__':
     p_rv = sub.add_parser('revoke-key', help='Revoke a key by its numeric ID')
     p_rv.add_argument('key_id', type=int, help='Numeric ID from list-keys')
 
+    p_ma = sub.add_parser('make-admin', help='Grant admin role to a game user')
+    p_ma.add_argument('username', help='Username of the game user to promote')
+
     p_rs = sub.add_parser('runserver', help='Start the web server')
     p_rs.add_argument('--host', default='0.0.0.0')
     p_rs.add_argument('--port', type=int, default=int(os.environ.get('PORT', 5000)))
@@ -246,6 +266,8 @@ if __name__ == '__main__':
         _cli_list_keys()
     elif args.cmd == 'revoke-key':
         _cli_revoke_key(args.key_id)
+    elif args.cmd == 'make-admin':
+        _cli_make_admin(args.username)
     else:
         init_db()
         debug = getattr(args, 'debug', False)

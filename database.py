@@ -125,6 +125,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass  # column already exists
 
+    # Migration: add role column to game_users (NULL | 'lab' | 'admin')
+    try:
+        conn.execute("ALTER TABLE game_users ADD COLUMN role TEXT DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     # Seed default tricks if table is empty
     if conn.execute('SELECT COUNT(*) FROM tricks').fetchone()[0] == 0:
         default_tricks = [
