@@ -52,18 +52,18 @@
       .auth-logo {
         text-align: center;
         padding: 56px 0 32px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
       }
-      .auth-logo h1 {
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: var(--text);
-        letter-spacing: -0.02em;
-        text-transform: uppercase;
+      .auth-logo img {
+        height: 52px;
+        width: auto;
       }
       .auth-logo p {
         color: var(--text-dim);
         font-size: 0.8rem;
-        margin-top: 6px;
         letter-spacing: 0.04em;
       }
 
@@ -173,12 +173,13 @@
         z-index: 50;
       }
       .app-wordmark {
-        font-size: 1rem;
-        font-weight: 800;
-        letter-spacing: -0.01em;
-        color: var(--text);
-        text-transform: uppercase;
         flex: 1;
+        display: flex;
+        align-items: center;
+      }
+      .app-wordmark img {
+        height: 28px;
+        width: auto;
       }
       .header-user-btn {
         display: flex;
@@ -1075,7 +1076,7 @@
     <!-- ════════ AUTH SCREEN ════════ -->
     <div id="auth-screen" class="hidden">
       <div class="auth-logo">
-        <h1>Game of Skate</h1>
+        <img src="/static/flipphone_icon_bw.svg" alt="flipPhone" />
         <p>Flip your phone. Land tricks. Challenge friends.</p>
       </div>
 
@@ -1127,7 +1128,9 @@
 
       <!-- Top Header -->
       <div class="app-header">
-        <div class="app-wordmark">flipPhone</div>
+        <div class="app-wordmark">
+          <img src="/static/flipphone_icon_bw.svg" alt="flipPhone" />
+        </div>
         <button id="header-user-btn" class="header-user-btn">
           <div id="header-avatar" class="header-avatar"></div>
           <span id="header-username" class="header-username"></span>
