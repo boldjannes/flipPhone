@@ -44,6 +44,16 @@ def index():
     return render_template('admin/index.html')
 
 
+@admin.route('/training')
+def training_page():
+    return render_template('admin/training.html')
+
+
+@admin.route('/models')
+def models_page():
+    return render_template('admin/models.html')
+
+
 @admin.route('/users')
 def users_page():
     return render_template('admin/users.html')

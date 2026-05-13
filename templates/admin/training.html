@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024">
+  <title>Training — Admin — flipPhone</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    </div>
+    <div class="login-title">Admin Panel</div>
+    <form id="login-form">
+      <div class="form-row">
+        <label for="u">Username</label>
+        <input id="u" type="text" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="form-row">
+        <label for="p">Password</label>
+        <input id="p" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div class="form-row" style="margin-top:20px">
+        <button type="submit" class="btn btn-full">Sign in</button>
+      </div>
+      <div id="login-error" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header class="header">
+    <a class="wordmark" href="/admin/">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+      <span class="wordmark-label">Admin</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/admin/">Dashboard</a>
+      <a href="/admin/training" class="active">Training</a>
+      <a href="/admin/models">Models</a>
+      <a href="/admin/users">Users</a>
+      <a href="/admin/embed">Embeddings</a>
+      <a href="/lab/">Recordings</a>
+    </nav>
+    <div class="header-right">
+      <span id="logged-in-as"></span>
+      <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="train-layout">
+
+      <form id="train-form">
+        <div class="form-row">
+          <label for="train-name">Run Name</label>
+          <input type="text" id="train-name" name="name" required
+                 placeholder="e.g. kickflip_v3_rf" autocomplete="off">
+        </div>
+
+        <div class="form-row" style="margin-top:16px">
+          <label for="train-model-type">Model Type</label>
+          <select id="train-model-type" class="role-select" style="width:100%;margin-top:4px">
+            <option value="random_forest">Random Forest</option>
+            <option value="svm">SVM</option>
+            <option value="mlp">MLP</option>
+          </select>
+        </div>
+
+        <div class="form-row" style="margin-top:16px">
+          <label>Tricks</label>
+          <div class="checkbox-grid" id="tricks-grid"></div>
+        </div>
+
+        <div class="form-row" style="margin-top:16px">
+          <label>Source Users</label>
+          <div style="margin-top:6px">
+            <label class="check-row">
+              <input type="checkbox" id="users-all" checked>
+              <span>All users</span>
+            </label>
+            <div id="user-checkboxes" class="user-list" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:24px">
+          <button type="submit" class="btn" id="train-submit-btn">Start Training</button>
+        </div>
+      </form>
+
+      <div>
+        <div id="train-status-section" style="display:none">
+          <div class="page-heading" style="margin-bottom:16px">Status</div>
+          <div id="train-status-box" class="train-status-box"></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>
+const TOKEN_KEY = 'fp_game_token';
+
+function token()       { return localStorage.getItem(TOKEN_KEY); }
+function authHeaders() { return { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }; }
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showLogin(err) {
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display   = 'none';
+  clearTimeout(trainPollTimer);
+  if (err) document.getElementById('login-error').textContent = err;
+}
+
+function showApp(username) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display   = 'block';
+  if (username) document.getElementById('logged-in-as').textContent = username;
+}
+
+async function verifyAdmin(t) {
+  const r = await fetch('/admin/api/users', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+  return r && r.ok;
+}
+
+async function checkAuth() {
+  const t = token();
+  if (!t) { showLogin(); return; }
+  if (await verifyAdmin(t)) {
+    const me  = await fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+    const usr = (me && me.ok) ? (await me.json()).username : '';
+    showApp(usr);
+    initTrainingForm();
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+  }
+}
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  const fd = new FormData(e.target);
+  const r  = await fetch('/game/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
+  }).catch(() => null);
+  if (!r) { errEl.textContent = 'Network error.'; return; }
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error || 'Login failed.'; return; }
+  localStorage.setItem(TOKEN_KEY, data.token);
+  if (await verifyAdmin(data.token)) {
+    showApp(data.user && data.user.username);
+    initTrainingForm();
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    errEl.textContent = 'Account does not have admin access.';
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  const t = token();
+  if (t) {
+    await fetch('/game/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + t } }).catch(() => {});
+    localStorage.removeItem(TOKEN_KEY);
+  }
+  showLogin();
+});
+
+// ── Training ──────────────────────────────────
+
+const TRICKS = [
+  { id: 'kickflip',      name: 'Kickflip' },
+  { id: 'heelflip',      name: 'Heelflip' },
+  { id: 'fs_shuvit',     name: 'FS Shuvit' },
+  { id: 'fs_360_shuvit', name: 'FS 360 Shuvit' },
+  { id: 'bs_shuvit',     name: 'BS Shuvit' },
+  { id: 'bs_360_shuvit', name: 'BS 360 Shuvit' },
+  { id: 'treflip',       name: 'Treflip' },
+  { id: 'late_kickflip', name: 'Late Kickflip' },
+];
+
+let trainPollTimer = null;
+
+function initTrainingForm() {
+  document.getElementById('tricks-grid').innerHTML = TRICKS.map(t =>
+    `<label class="check-row">
+       <input type="checkbox" class="trick-check" value="${t.id}" checked>
+       <span>${esc(t.name)}</span>
+     </label>`
+  ).join('');
+
+  loadUsersForTraining();
+
+  document.getElementById('users-all').addEventListener('change', e => {
+    document.getElementById('user-checkboxes').style.display = e.target.checked ? 'none' : '';
+  });
+}
+
+async function loadUsersForTraining() {
+  const r = await fetch('/admin/api/users', { headers: authHeaders() }).catch(() => null);
+  if (!r || !r.ok) return;
+  const users = await r.json();
+  document.getElementById('user-checkboxes').innerHTML = users.length
+    ? users.map(u =>
+        `<label class="check-row">
+           <input type="checkbox" class="user-check" value="${u.id}" checked>
+           <span>${esc(u.username)}${u.display_name ? ' · ' + esc(u.display_name) : ''}</span>
+         </label>`).join('')
+    : '<span style="color:var(--dim);font-size:12px">No users found.</span>';
+}
+
+function setTrainFormEnabled(on) {
+  document.getElementById('train-submit-btn').disabled = !on;
+  document.querySelectorAll('#train-form input, #train-form select').forEach(el => el.disabled = !on);
+}
+
+function showTrainStatus(jobId, status, accuracy, error) {
+  document.getElementById('train-status-section').style.display = '';
+  const labels   = { pending: 'Pending', running: 'Running', done: 'Done', failed: 'Failed' };
+  const badgeCls = { pending: 'badge-none', running: 'badge-running', done: 'badge-done', failed: 'badge-failed' };
+  let detail = '';
+  if (status === 'done') {
+    detail = accuracy != null
+      ? `<div class="status-accuracy">Accuracy: <strong>${(accuracy * 100).toFixed(1)}%</strong></div>`
+      : '';
+    detail += `<a href="/admin/models" class="btn btn-sm" style="display:inline-block;margin-top:14px">View Models</a>`;
+  } else if (status === 'failed') {
+    detail = `<div class="status-error">${esc(error || 'Unknown error')}</div>`;
+  } else {
+    detail = `<div class="status-msg">Waiting for ML backend…</div>`;
+  }
+  document.getElementById('train-status-box').innerHTML =
+    `<div class="status-header">
+       ${jobId != null ? `<span class="status-job-id">Job #${jobId}</span>` : ''}
+       <span class="badge ${badgeCls[status] || 'badge-none'}">${labels[status] || status}</span>
+     </div>
+     ${detail}`;
+}
+
+async function pollTraining(jobId) {
+  const r = await fetch(`/admin/api/train/${encodeURIComponent(jobId)}`, {
+    headers: authHeaders(),
+  }).catch(() => null);
+  if (!r || !r.ok) {
+    showTrainStatus(jobId, 'failed', null, r ? `HTTP ${r.status}` : 'Network error');
+    setTrainFormEnabled(true);
+    return;
+  }
+  const data = await r.json();
+  showTrainStatus(jobId, data.status, data.accuracy, data.error);
+  if (data.status !== 'done' && data.status !== 'failed') {
+    trainPollTimer = setTimeout(() => pollTraining(jobId), 3000);
+  } else {
+    setTrainFormEnabled(true);
+  }
+}
+
+document.getElementById('train-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name       = document.getElementById('train-name').value.trim();
+  const model_type = document.getElementById('train-model-type').value;
+  const tricks     = Array.from(document.querySelectorAll('.trick-check:checked')).map(cb => cb.value);
+  const allUsers   = document.getElementById('users-all').checked;
+  const source_users = allUsers
+    ? null
+    : Array.from(document.querySelectorAll('.user-check:checked')).map(cb => parseInt(cb.value, 10));
+
+  if (!tricks.length)                    { alert('Select at least one trick.'); return; }
+  if (!allUsers && !source_users.length) { alert('Select at least one user.');  return; }
+
+  clearTimeout(trainPollTimer);
+  setTrainFormEnabled(false);
+
+  const r = await fetch('/admin/api/train', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ name, model_type, tricks, source_users }),
+  }).catch(() => null);
+
+  if (!r || !r.ok) {
+    const msg = r ? ((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`) : 'Network error';
+    showTrainStatus(null, 'failed', null, msg);
+    setTrainFormEnabled(true);
+    return;
+  }
+
+  const { job_id } = await r.json();
+  showTrainStatus(job_id, 'pending', null, null);
+  pollTraining(job_id);
+});
+
+// ── Init ──────────────────────────────────────
+checkAuth();
+</script>
+</body>
+</html>

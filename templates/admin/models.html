@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024">
+  <title>Models — Admin — flipPhone</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    </div>
+    <div class="login-title">Admin Panel</div>
+    <form id="login-form">
+      <div class="form-row">
+        <label for="u">Username</label>
+        <input id="u" type="text" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="form-row">
+        <label for="p">Password</label>
+        <input id="p" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div class="form-row" style="margin-top:20px">
+        <button type="submit" class="btn btn-full">Sign in</button>
+      </div>
+      <div id="login-error" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header class="header">
+    <a class="wordmark" href="/admin/">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+      <span class="wordmark-label">Admin</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/admin/">Dashboard</a>
+      <a href="/admin/training">Training</a>
+      <a href="/admin/models" class="active">Models</a>
+      <a href="/admin/users">Users</a>
+      <a href="/admin/embed">Embeddings</a>
+      <a href="/lab/">Recordings</a>
+    </nav>
+    <div class="header-right">
+      <span id="logged-in-as"></span>
+      <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Tricks</th>
+          <th>Classes</th>
+          <th>Accuracy</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th style="min-width:140px"></th>
+        </tr>
+      </thead>
+      <tbody id="models-tbody">
+        <tr><td colspan="8" class="table-msg">Loading…</td></tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<!-- Metrics Modal -->
+<div id="metrics-modal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="modal-title">Metrics</span>
+      <button class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body">
+      <div class="metric-loading">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY = 'fp_game_token';
+
+function token()       { return localStorage.getItem(TOKEN_KEY); }
+function authHeaders() { return { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }; }
+
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showLogin(err) {
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display   = 'none';
+  stopPolling();
+  if (err) document.getElementById('login-error').textContent = err;
+}
+
+function showApp(username) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display   = 'block';
+  if (username) document.getElementById('logged-in-as').textContent = username;
+}
+
+async function verifyAdmin(t) {
+  const r = await fetch('/admin/api/users', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+  return r && r.ok;
+}
+
+async function checkAuth() {
+  const t = token();
+  if (!t) { showLogin(); return; }
+  if (await verifyAdmin(t)) {
+    const me  = await fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+    const usr = (me && me.ok) ? (await me.json()).username : '';
+    showApp(usr);
+    loadModels();
+    startPolling();
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+  }
+}
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  const fd = new FormData(e.target);
+  const r  = await fetch('/game/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
+  }).catch(() => null);
+  if (!r) { errEl.textContent = 'Network error.'; return; }
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error || 'Login failed.'; return; }
+  localStorage.setItem(TOKEN_KEY, data.token);
+  if (await verifyAdmin(data.token)) {
+    showApp(data.user && data.user.username);
+    loadModels();
+    startPolling();
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    errEl.textContent = 'Account does not have admin access.';
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  const t = token();
+  if (t) {
+    await fetch('/game/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + t } }).catch(() => {});
+    localStorage.removeItem(TOKEN_KEY);
+  }
+  showLogin();
+});
+
+// ── Models ────────────────────────────────────
+
+let pollTimer = null;
+
+function fmt(v, d = 1) { return v != null ? (v * 100).toFixed(d) + '%' : '—'; }
+
+function renderModels(models) {
+  const tbody = document.getElementById('models-tbody');
+  if (!models.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="table-msg">No models found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = models.map(m => {
+    const tricks = Array.isArray(m.tricks) ? m.tricks.join(', ') : (m.tricks || '—');
+    const date   = m.created_at ? m.created_at.slice(0, 10) : '—';
+    const active = !!m.is_active;
+    const status = active
+      ? '<span class="badge badge-active">active</span>'
+      : '<span class="badge badge-none">—</span>';
+    return `
+      <tr data-id="${esc(m.id)}" data-name="${esc(m.name || m.id)}">
+        <td><strong>${esc(m.name || m.id)}</strong></td>
+        <td>${esc(m.type || '—')}</td>
+        <td class="cell-tricks" title="${esc(tricks)}">${esc(tricks)}</td>
+        <td>${m.num_classes ?? '—'}</td>
+        <td>${fmt(m.accuracy)}</td>
+        <td>${date}</td>
+        <td>${status}</td>
+        <td class="cell-actions">
+          <button class="btn btn-sm activate-btn" ${active ? 'disabled' : ''}>Activate</button>
+          <button class="btn btn-sm btn-ghost details-btn" style="margin-left:6px">Details</button>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+async function loadModels() {
+  const r = await fetch('/admin/api/models', { headers: authHeaders() }).catch(() => null);
+  if (!r) return;
+  if (r.status === 401 || r.status === 403) { showLogin('Session expired.'); return; }
+  if (!r.ok) {
+    document.getElementById('models-tbody').innerHTML =
+      '<tr><td colspan="8" class="table-msg" style="color:var(--danger)">ML backend unavailable.</td></tr>';
+    return;
+  }
+  renderModels(await r.json());
+}
+
+async function activateModel(id, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  const r = await fetch(`/admin/api/models/${encodeURIComponent(id)}/activate`, {
+    method: 'POST', headers: authHeaders(),
+  }).catch(() => null);
+  if (r && r.ok) {
+    await loadModels();
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Activate';
+    const msg = r ? ((await r.json().catch(() => ({}))).error || `Error ${r.status}`) : 'Network error';
+    alert('Activation failed: ' + msg);
+  }
+}
+
+document.getElementById('models-tbody').addEventListener('click', e => {
+  const row = e.target.closest('tr[data-id]');
+  if (!row) return;
+  if (e.target.classList.contains('activate-btn')) activateModel(row.dataset.id, e.target);
+  if (e.target.classList.contains('details-btn'))  showMetrics(row.dataset.id, row.dataset.name);
+});
+
+function startPolling() { stopPolling(); pollTimer = setInterval(loadModels, 30_000); }
+function stopPolling()  { clearInterval(pollTimer); pollTimer = null; }
+
+// ── Metrics Modal ─────────────────────────────
+
+function openModal(title) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = '<div class="metric-loading">Loading…</div>';
+  document.getElementById('metrics-modal').style.display = 'flex';
+}
+function closeModal() { document.getElementById('metrics-modal').style.display = 'none'; }
+
+function renderMetrics(data) {
+  const el = document.getElementById('modal-body');
+  let html  = '';
+  const TOP = [
+    { key: 'accuracy',  label: 'Accuracy' },
+    { key: 'precision', label: 'Precision' },
+    { key: 'recall',    label: 'Recall' },
+    { key: 'f1',        label: 'F1' },
+  ].filter(m => data[m.key] != null);
+  if (TOP.length) {
+    html += '<div class="metric-row">' + TOP.map(m =>
+      `<div class="metric-item">
+         <div class="metric-value">${fmt(data[m.key])}</div>
+         <div class="metric-label">${esc(m.label)}</div>
+       </div>`).join('') + '</div>';
+  }
+  if (data.per_class && Object.keys(data.per_class).length) {
+    html += `<table class="data-table" style="margin-bottom:0">
+      <thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead>
+      <tbody>` +
+      Object.entries(data.per_class).map(([cls, m]) =>
+        `<tr>
+           <td><strong>${esc(cls)}</strong></td>
+           <td>${fmt(m.precision)}</td><td>${fmt(m.recall)}</td><td>${fmt(m.f1)}</td>
+           <td>${m.support ?? '—'}</td>
+         </tr>`).join('') +
+      `</tbody></table>`;
+  }
+  if (!html) {
+    html = `<pre style="font-size:12px;overflow:auto;white-space:pre-wrap">${esc(JSON.stringify(data, null, 2))}</pre>`;
+  }
+  el.innerHTML = html;
+}
+
+async function showMetrics(id, name) {
+  openModal(name + ' — Metrics');
+  const r = await fetch(`/admin/api/models/${encodeURIComponent(id)}/metrics`, {
+    headers: authHeaders(),
+  }).catch(() => null);
+  if (!r || !r.ok) {
+    document.getElementById('modal-body').innerHTML =
+      '<div class="metric-loading" style="color:var(--danger)">Failed to load metrics.</div>';
+    return;
+  }
+  renderMetrics(await r.json());
+}
+
+document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+document.getElementById('metrics-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── Init ──────────────────────────────────────
+checkAuth();
+</script>
+</body>
+</html>
