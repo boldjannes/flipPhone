@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, Response, jsonify, render_template, request, send_file
 
 from database import (
-    generate_key, get_db, now_iso, require_admin, row_to_dict,
+    generate_key, get_db, now_iso, require_admin, require_admin_or_key, row_to_dict,
 )
 
 admin = Blueprint('admin', __name__, url_prefix='/admin')
@@ -280,7 +280,7 @@ def _get_export_rows(db):
 
 
 @admin.route('/api/export/json')
-@require_admin
+@require_admin_or_key
 def export_json():
     rows = _get_export_rows(get_db())
     if not rows:
@@ -299,7 +299,7 @@ def export_json():
 
 
 @admin.route('/api/export/csv')
-@require_admin
+@require_admin_or_key
 def export_csv():
     rows = _get_export_rows(get_db())
     if not rows:

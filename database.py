@@ -275,3 +275,26 @@ def require_admin(f):
         g.game_user = row
         return f(*args, **kwargs)
     return decorated
+
+
+def require_admin_or_key(f):
+    """Accepts Bearer token (admin role) OR an admin API key via X-API-Key header / ?api_key= param."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            row = _session_user(auth[7:])
+            if row and row['role'] == 'admin':
+                g.game_user = row
+                return f(*args, **kwargs)
+        key = request.headers.get('X-API-Key') or request.args.get('api_key', '')
+        if key:
+            row = get_db().execute(
+                'SELECT * FROM api_keys WHERE key = ? AND is_admin = 1', (key,)
+            ).fetchone()
+            if row:
+                g.key_row = row
+                g.game_user = {'uid': None, 'username': row['name'], 'display_name': None, 'role': 'admin'}
+                return f(*args, **kwargs)
+        return jsonify({'error': 'Admin access required'}), 403
+    return decorated
