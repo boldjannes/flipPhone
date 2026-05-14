@@ -94,6 +94,7 @@ def create_app():
     )
 
     log = _setup_logging(app)
+    init_db()
 
     # Register teardown
     app.teardown_appcontext(close_db)
