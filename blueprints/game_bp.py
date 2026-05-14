@@ -13,7 +13,7 @@ from functools import wraps
 from flask import Blueprint, g, jsonify, render_template, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import get_db, now_iso
+from database import get_db, normalize_trick, now_iso
 
 log = logging.getLogger('flipphone.game')
 
@@ -171,11 +171,6 @@ def _get_tricks(db):
     return [{'id': r['id'], 'name': r['name']} for r in rows]
 
 
-def _normalize_trick(raw, db):
-    """Resolve a trick string (id or display name) to its canonical id."""
-    row = db.execute('SELECT id FROM tricks WHERE id = ? OR name = ?', (raw, raw)).fetchone()
-    return row['id'] if row else None
-
 
 def _user_profile(row):
     """Extract public user profile from a db row."""
@@ -248,11 +243,11 @@ def list_tricks():
 @require_game_session
 def save_game_recording():
     data = request.get_json(silent=True) or {}
-    trick = str(data.get('trick', ''))[:64]
+    raw_trick = str(data.get('trick', ''))[:64]
     samples = data.get('samples')
     source = str(data.get('source', 'game'))[:32]
 
-    if not trick or not isinstance(samples, list) or len(samples) < 5:
+    if not raw_trick or not isinstance(samples, list) or len(samples) < 5:
         return jsonify({'error': 'trick and samples required'}), 400
 
     import uuid
@@ -260,14 +255,15 @@ def save_game_recording():
     me = g.game_user['uid']
     db = get_db()
 
+    trick = normalize_trick(raw_trick, db)
+    if not trick:
+        return jsonify({'error': f'Unknown trick: {raw_trick}'}), 400
+
     # Compute metadata from samples
     duration_ms = samples[-1].get('t', 0) if samples else 0
     sample_count = len(samples)
     sample_rate = round(sample_count / max(duration_ms / 1000, 0.01)) if duration_ms > 0 else 0
 
-    # Store with key_id = NULL (no API key, game user instead)
-    # We need a key_id for the FK — use a sentinel or skip FK.
-    # Simplest: insert without FK constraint by using a direct INSERT.
     try:
         db.execute(
             '''INSERT INTO recordings
@@ -694,7 +690,7 @@ def set_line(game_id):
     db = get_db()
 
     # Normalize trick names: accept both id ("kickflip") and display name ("Kickflip")
-    normalized = [_normalize_trick(t, db) for t in tricks]
+    normalized = [normalize_trick(t, db) for t in tricks]
     invalid = [raw for raw, norm in zip(tricks, normalized) if norm is None]
     if invalid:
         return jsonify({'error': f'Invalid tricks: {", ".join(invalid)}'}), 400
@@ -748,7 +744,7 @@ def submit_attempt(game_id):
     db = get_db()
 
     # Normalize trick names (accept display names from predict API)
-    normalized = [_normalize_trick(t, db) for t in tricks]
+    normalized = [normalize_trick(t, db) for t in tricks]
     invalid = [raw for raw, norm in zip(tricks, normalized) if norm is None]
     if invalid:
         return jsonify({'error': f'Invalid tricks: {", ".join(invalid)}'}), 400

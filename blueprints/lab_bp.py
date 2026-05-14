@@ -7,7 +7,7 @@ import json
 
 from flask import Blueprint, g, jsonify, redirect, render_template, request
 
-from database import get_db, now_iso, require_lab
+from database import get_db, normalize_trick, now_iso, require_lab
 
 lab = Blueprint('lab', __name__, url_prefix='/lab')
 
@@ -58,6 +58,9 @@ def save_recording():
         return jsonify({'error': 'samples must be a list'}), 400
 
     db = get_db()
+    trick_id = normalize_trick(str(data['trick'])[:64], db)
+    if not trick_id:
+        return jsonify({'error': f'Unknown trick: {data["trick"]}'}), 400
     try:
         db.execute(
             '''INSERT INTO recordings
@@ -67,7 +70,7 @@ def save_recording():
             (
                 str(data['id']),
                 g.game_user['uid'],
-                str(data['trick'])[:64],
+                trick_id,
                 str(data['timestamp']),
                 int(data['durationMs']),
                 int(data['sampleCount']),

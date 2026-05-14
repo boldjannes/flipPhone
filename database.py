@@ -161,6 +161,21 @@ def init_db():
         conn.execute('PRAGMA foreign_keys = ON')
         conn.commit()
 
+    # Migration: normalize recordings.trick from display name to id
+    name_to_id = {
+        row[0]: row[1]
+        for row in conn.execute('SELECT name, id FROM tricks').fetchall()
+    }
+    if name_to_id:
+        conn.executemany(
+            'UPDATE recordings SET trick = ? WHERE trick = ?',
+            [(id_, name) for name, id_ in name_to_id.items() if name != id_],
+        )
+        conn.executemany(
+            'UPDATE reference_recordings SET trick = ? WHERE trick = ?',
+            [(id_, name) for name, id_ in name_to_id.items() if name != id_],
+        )
+
     # Seed default tricks if table is empty
     if conn.execute('SELECT COUNT(*) FROM tricks').fetchone()[0] == 0:
         default_tricks = [
@@ -180,6 +195,12 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+
+def normalize_trick(raw, db):
+    """Resolve a trick string (id or display name) to its canonical id, or None."""
+    row = db.execute('SELECT id FROM tricks WHERE id = ? OR name = ?', (raw, raw)).fetchone()
+    return row['id'] if row else None
 
 
 def generate_key():
