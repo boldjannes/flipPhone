@@ -5,7 +5,7 @@ DATE=$(date +%Y%m%d_%H%M%S)
 
 mkdir -p "$BACKUP_DIR"
 
-sqlite3 "$DB_PATH" ".backup '$BACKUP_DIR/flipphone_$DATE.db'"
+sqlite3 "$DB_PATH" ".backup $BACKUP_DIR/flipphone_$DATE.db"
 
 find "$BACKUP_DIR" -name "*.db" -mtime +30 -delete
 

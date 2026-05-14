@@ -1,3 +1,8 @@
 - Modelle löschen
 - beim spiel und playground nur die tricks anzeigen, die auch tatsächlich im ML Service trainiert wurden (aktuell 8 Tricks)
 - tricks die in spielen und playground aufgenommen werden sollen auch in der Datenbank gespeichert werden
+
+Jetzt (bevor 3D anfängt): Vite-Setup, animationsrelevanten Code in echte Module ziehen, SQLite-Backup-Cronjob
+Mit erstem 3D-Commit: Three.js, GLTF-Loader, einen SkateboardRenderer der von beiden Game- und Lab-Seiten genutzt wird
+Wenn Multiplayer echter Spaß werden soll: Flask-SocketIO für Game-Turns
+Wenn User-Zahlen wachsen: SQLite → PostgreSQL ist kein großer Umbau dank SQLAlchemy, aber der Moment dafür kommt.
