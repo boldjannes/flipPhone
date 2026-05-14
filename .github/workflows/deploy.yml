@@ -17,6 +17,7 @@ jobs:
           script: |
             cd /opt/flipPhone
             git pull origin main
+            chmod +x backup_db.sh
             source venv/bin/activate
             pip install -r requirements.txt --quiet
             sudo systemctl restart flipphone
