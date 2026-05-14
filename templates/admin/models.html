@@ -187,9 +187,9 @@ function renderModels(models) {
     return `
       <tr data-id="${esc(m.id)}" data-name="${esc(m.name || m.id)}">
         <td><strong>${esc(m.name || m.id)}</strong></td>
-        <td>${esc(m.type || '—')}</td>
+        <td>${esc(m.model_type || '—')}</td>
         <td class="cell-tricks" title="${esc(tricks)}">${esc(tricks)}</td>
-        <td>${m.num_classes ?? '—'}</td>
+        <td>${m.n_classes ?? '—'}</td>
         <td>${fmt(m.accuracy)}</td>
         <td>${date}</td>
         <td>${status}</td>
