@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024">
+  <title>Tricks — Admin — flipPhone</title>
+  <link rel="stylesheet" href="/static/admin.css">
+  <style>
+    .trick-row td { vertical-align: middle; }
+    .cell-anim { width: 80px; padding: 6px 14px; }
+    .anim-canvas {
+      display: block;
+      width: 56px;
+      height: 80px;
+      background: #111;
+      border: 1px solid #333;
+    }
+    .anim-placeholder {
+      width: 56px;
+      height: 80px;
+      background: #f4f4f4;
+      border: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--dim);
+      text-align: center;
+      line-height: 1.3;
+    }
+    .cell-count { width: 80px; font-variant-numeric: tabular-nums; }
+    .add-form {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      margin-bottom: 28px;
+      padding: 20px 24px;
+      border: 1.5px solid var(--border);
+      background: #fafafa;
+    }
+    .add-form .form-row { margin: 0; flex: 1; }
+    .add-form .form-row label { margin-bottom: 5px; }
+    .add-form input { width: 100%; }
+    .add-form-error {
+      font-size: 12px;
+      color: var(--danger);
+      margin-top: 6px;
+      min-height: 16px;
+    }
+    .add-form-wrap { flex: 1; }
+  </style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    </div>
+    <div class="login-title">Admin Panel</div>
+    <form id="login-form">
+      <div class="form-row">
+        <label for="u">Username</label>
+        <input id="u" type="text" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="form-row">
+        <label for="p">Password</label>
+        <input id="p" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div class="form-row" style="margin-top:20px">
+        <button type="submit" class="btn btn-full">Sign in</button>
+      </div>
+      <div id="login-error" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header class="header">
+    <a class="wordmark" href="/admin/">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+      <span class="wordmark-label">Admin</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/admin/">Dashboard</a>
+      <a href="/admin/training">Training</a>
+      <a href="/admin/models">Models</a>
+      <a href="/admin/users">Users</a>
+      <a href="/admin/tricks" class="active">Tricks</a>
+      <a href="/admin/embed">Embeddings</a>
+      <a href="/admin/recordings">Recordings</a>
+    </nav>
+    <div class="header-right">
+      <span id="logged-in-as"></span>
+      <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="page-heading">Tricks</div>
+
+    <!-- Add trick form -->
+    <form id="add-form" class="add-form">
+      <div class="add-form-wrap">
+        <div style="display:flex;gap:10px">
+          <div class="form-row" style="flex:1">
+            <label for="new-id">ID</label>
+            <input id="new-id" type="text" placeholder="e.g. kickflip" autocomplete="off">
+          </div>
+          <div class="form-row" style="flex:2">
+            <label for="new-name">Name</label>
+            <input id="new-name" type="text" placeholder="e.g. Kickflip" autocomplete="off">
+          </div>
+        </div>
+        <div id="add-error" class="add-form-error"></div>
+      </div>
+      <button type="submit" class="btn" style="flex-shrink:0;height:36px;align-self:center;margin-top:2px">Add Trick</button>
+    </form>
+
+    <!-- Tricks table -->
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width:120px">ID</th>
+          <th>Name</th>
+          <th class="cell-count">Recordings</th>
+          <th class="cell-anim">Reference</th>
+          <th style="width:80px"></th>
+        </tr>
+      </thead>
+      <tbody id="tricks-tbody">
+        <tr><td colspan="5" class="table-msg">Loading…</td></tr>
+      </tbody>
+    </table>
+  </main>
+</div>
+
+<!-- Confirm delete modal -->
+<div id="confirm-modal" class="modal-overlay" style="display:none">
+  <div class="modal" style="width:360px">
+    <div class="modal-header">
+      <span>Delete Trick</span>
+      <button class="modal-close" id="modal-cancel">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;margin-bottom:20px">
+        Delete <strong id="modal-trick-name"></strong>? This cannot be undone.
+        Existing recordings referencing this trick will lose their label.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" id="modal-cancel2">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="modal-confirm">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const TOKEN_KEY = 'fp_game_token';
+function token() { return localStorage.getItem(TOKEN_KEY); }
+function authH()  { return { Authorization: 'Bearer ' + token(), 'Content-Type': 'application/json' }; }
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Auth ──────────────────────────────────────
+function showLogin(err) {
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display   = 'none';
+  if (err) document.getElementById('login-error').textContent = err;
+}
+function showApp(username) {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display   = 'block';
+  if (username) document.getElementById('logged-in-as').textContent = username;
+}
+async function verifyAdmin(t) {
+  const r = await fetch('/admin/api/users', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+  return r && r.ok;
+}
+
+// ── 3D phone animation ────────────────────────
+function qMul(a, b) {
+  return [
+    a[0]*b[0] - a[1]*b[1] - a[2]*b[2] - a[3]*b[3],
+    a[0]*b[1] + a[1]*b[0] + a[2]*b[3] - a[3]*b[2],
+    a[0]*b[2] - a[1]*b[3] + a[2]*b[0] + a[3]*b[1],
+    a[0]*b[3] + a[1]*b[2] - a[2]*b[1] + a[3]*b[0],
+  ];
+}
+function qNorm(q) {
+  const len = Math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]);
+  if (len < 1e-10) return [1,0,0,0];
+  return [q[0]/len, q[1]/len, q[2]/len, q[3]/len];
+}
+function qToMatrix(q) {
+  const [w,x,y,z] = q;
+  return [
+    1-2*(y*y+z*z),   2*(x*y-z*w),   2*(x*z+y*w),
+      2*(x*y+z*w), 1-2*(x*x+z*z),   2*(y*z-x*w),
+      2*(x*z-y*w),   2*(y*z+x*w), 1-2*(x*x+y*y),
+  ];
+}
+function computeOrientations(samples) {
+  const ori = [[1,0,0,0]];
+  for (let i = 1; i < samples.length; i++) {
+    const dt = (samples[i].t - samples[i-1].t) / 1000;
+    const {gx, gy, gz} = samples[i];
+    const angle = Math.sqrt(gx*gx+gy*gy+gz*gz) * dt;
+    let dq;
+    if (angle < 1e-8) {
+      dq = [1,0,0,0];
+    } else {
+      const ha = angle/2, omega = angle/dt;
+      const sinHa = Math.sin(ha);
+      dq = [Math.cos(ha), gx/omega*sinHa, gy/omega*sinHa, gz/omega*sinHa];
+    }
+    ori.push(qNorm(qMul(ori[i-1], dq)));
+  }
+  return ori;
+}
+function project(pt, m, cx, cy, scale, dist) {
+  const rx = m[0]*pt[0]+m[1]*pt[1]+m[2]*pt[2];
+  const ry = m[3]*pt[0]+m[4]*pt[1]+m[5]*pt[2];
+  const rz = m[6]*pt[0]+m[7]*pt[1]+m[8]*pt[2];
+  const z  = dist + rz;
+  const f  = dist / Math.max(z, 0.1);
+  return [cx + rx*scale*f, cy - ry*scale*f, z];
+}
+function drawPhone3D(ctx, W, H, q) {
+  const m = qToMatrix(q);
+  const cx = W/2, cy = H/2;
+  const scale = Math.min(W,H) * 0.28;
+  const dist  = 4;
+  const pw=0.5, ph=1.0, pd=0.08;
+  const hw=pw/2, hh=ph/2, hd=pd/2;
+  const corners = [
+    [-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],
+    [-hw,-hh, hd],[hw,-hh, hd],[hw,hh, hd],[-hw,hh, hd],
+  ];
+  const projected = corners.map(p => project(p,m,cx,cy,scale,dist));
+  const faces = [
+    {idx:[0,1,2,3], color:"#1a1a1a", screen:false},
+    {idx:[4,5,6,7], color:"#2a2a2a", screen:true },
+    {idx:[0,1,5,4], color:"#222",    screen:false},
+    {idx:[2,3,7,6], color:"#222",    screen:false},
+    {idx:[0,3,7,4], color:"#252525", screen:false},
+    {idx:[1,2,6,5], color:"#252525", screen:false},
+  ];
+  const fwd = faces.map(f => {
+    const ps = f.idx.map(i => projected[i]);
+    const avgZ = ps.reduce((s,p)=>s+p[2],0)/ps.length;
+    const ax=ps[1][0]-ps[0][0], ay=ps[1][1]-ps[0][1];
+    const bx=ps[3][0]-ps[0][0], by=ps[3][1]-ps[0][1];
+    return {...f, ps, avgZ, cross: ax*by-ay*bx};
+  });
+  fwd.sort((a,b)=>a.avgZ-b.avgZ);
+  for (const face of fwd) {
+    ctx.beginPath();
+    ctx.moveTo(face.ps[0][0], face.ps[0][1]);
+    for (let i=1;i<face.ps.length;i++) ctx.lineTo(face.ps[i][0], face.ps[i][1]);
+    ctx.closePath();
+    ctx.fillStyle = face.color;
+    ctx.fill();
+    ctx.strokeStyle = "#444"; ctx.lineWidth = 1; ctx.stroke();
+    if (face.screen && face.cross < 0) {
+      const ins = 0.07;
+      const sc = [
+        [-hw+ins*pw,-hh+ins*ph, hd+0.001],[hw-ins*pw,-hh+ins*ph, hd+0.001],
+        [ hw-ins*pw, hh-ins*ph, hd+0.001],[-hw+ins*pw, hh-ins*ph, hd+0.001],
+      ].map(p=>project(p,m,cx,cy,scale,dist));
+      ctx.beginPath();
+      ctx.moveTo(sc[0][0],sc[0][1]);
+      for (let i=1;i<sc.length;i++) ctx.lineTo(sc[i][0],sc[i][1]);
+      ctx.closePath();
+      ctx.fillStyle="#003344"; ctx.fill();
+    }
+  }
+}
+function getQAtTime(samples, ori, t) {
+  let idx=0;
+  for (let i=0;i<samples.length-1;i++) { if (samples[i+1].t>=t){idx=i;break;} idx=i; }
+  const t0=samples[idx].t, t1=idx+1<samples.length?samples[idx+1].t:t0;
+  const frac=t1>t0?(t-t0)/(t1-t0):0;
+  const q0=ori[idx], q1=idx+1<ori.length?ori[idx+1]:q0;
+  const sign = (q0[0]*q1[0]+q0[1]*q1[1]+q0[2]*q1[2]+q0[3]*q1[3])<0?-1:1;
+  return qNorm([q0[0]+(sign*q1[0]-q0[0])*frac, q0[1]+(sign*q1[1]-q0[1])*frac,
+                q0[2]+(sign*q1[2]-q0[2])*frac, q0[3]+(sign*q1[3]-q0[3])*frac]);
+}
+
+// ── Per-canvas animation state ────────────────
+const animStates = new Map(); // canvasId → state
+
+function startCanvasAnim(canvas, samples) {
+  const ori = computeOrientations(samples);
+  const totalTime = samples.length > 0 ? samples[samples.length-1].t : 0;
+  const st = { samples, ori, totalTime, currentTime: 0, lastFrame: null, rafId: null };
+  animStates.set(canvas, st);
+
+  function frame(now) {
+    if (!st.rafId) return;
+    if (st.lastFrame !== null) {
+      st.currentTime += (now - st.lastFrame) * 0.6; // 0.6x speed
+      if (st.currentTime >= st.totalTime) st.currentTime = 0; // loop
+    }
+    st.lastFrame = now;
+
+    const W = canvas.clientWidth  || canvas.width;
+    const H = canvas.clientHeight || canvas.height;
+    canvas.width  = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    if (ori.length >= 2) {
+      const q = getQAtTime(st.samples, st.ori, st.currentTime);
+      drawPhone3D(ctx, W, H, q);
+    }
+    st.rafId = requestAnimationFrame(frame);
+  }
+  st.rafId = requestAnimationFrame(frame);
+}
+
+function stopCanvasAnim(canvas) {
+  const st = animStates.get(canvas);
+  if (st && st.rafId) { cancelAnimationFrame(st.rafId); st.rafId = null; }
+  animStates.delete(canvas);
+}
+
+// ── Rendering ─────────────────────────────────
+let pendingDelete = null;
+
+function renderTricks(tricks) {
+  // stop running animations before re-render
+  document.querySelectorAll('.anim-canvas').forEach(c => stopCanvasAnim(c));
+
+  const tbody = document.getElementById('tricks-tbody');
+  if (!tricks.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="table-msg">No tricks defined yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = tricks.map(t => `
+    <tr class="trick-row" data-id="${esc(t.id)}">
+      <td style="font-family:monospace;font-size:12px;color:var(--dim)">${esc(t.id)}</td>
+      <td style="font-weight:700">${esc(t.name)}</td>
+      <td class="cell-count">${t.recording_count}</td>
+      <td class="cell-anim">
+        ${t.reference
+          ? `<canvas class="anim-canvas" data-trick="${esc(t.id)}" width="56" height="80"></canvas>`
+          : `<div class="anim-placeholder">no ref</div>`}
+      </td>
+      <td style="text-align:right;padding-right:16px">
+        <button class="btn btn-danger btn-sm delete-btn" data-id="${esc(t.id)}" data-name="${esc(t.name)}">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+
+  // Start animations for tricks with references
+  tricks.forEach(t => {
+    if (!t.reference || !t.reference.samples) return;
+    const canvas = tbody.querySelector(`canvas[data-trick="${t.id}"]`);
+    if (canvas) startCanvasAnim(canvas, t.reference.samples);
+  });
+
+  tbody.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => showDeleteConfirm(btn.dataset.id, btn.dataset.name));
+  });
+}
+
+// ── Delete modal ──────────────────────────────
+function showDeleteConfirm(id, name) {
+  pendingDelete = id;
+  document.getElementById('modal-trick-name').textContent = name;
+  document.getElementById('confirm-modal').style.display = 'flex';
+}
+function hideModal() {
+  pendingDelete = null;
+  document.getElementById('confirm-modal').style.display = 'none';
+}
+document.getElementById('modal-cancel').addEventListener('click',  hideModal);
+document.getElementById('modal-cancel2').addEventListener('click', hideModal);
+document.getElementById('modal-confirm').addEventListener('click', async () => {
+  if (!pendingDelete) return;
+  const id = pendingDelete;
+  hideModal();
+  const r = await fetch(`/admin/api/tricks/${encodeURIComponent(id)}`, {
+    method: 'DELETE', headers: authH(),
+  }).catch(() => null);
+  if (r && r.ok) {
+    await loadAndRender();
+  } else {
+    const data = r ? await r.json().catch(()=>({})) : {};
+    alert(data.error || 'Delete failed.');
+  }
+});
+
+// ── Add form ──────────────────────────────────
+document.getElementById('add-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('add-error');
+  errEl.textContent = '';
+  const id   = document.getElementById('new-id').value.trim();
+  const name = document.getElementById('new-name').value.trim();
+  if (!id || !name) { errEl.textContent = 'Both ID and Name are required.'; return; }
+
+  const r = await fetch('/admin/api/tricks', {
+    method: 'POST', headers: authH(),
+    body: JSON.stringify({ id, name }),
+  }).catch(() => null);
+  const data = r ? await r.json().catch(()=>({})) : {};
+  if (!r || !r.ok) { errEl.textContent = data.error || 'Failed to add trick.'; return; }
+
+  document.getElementById('new-id').value   = '';
+  document.getElementById('new-name').value = '';
+  await loadAndRender();
+});
+
+// Auto-fill ID from name
+document.getElementById('new-name').addEventListener('input', e => {
+  const idEl = document.getElementById('new-id');
+  if (!idEl.dataset.manuallyEdited) {
+    idEl.value = e.target.value.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  }
+});
+document.getElementById('new-id').addEventListener('input', e => {
+  e.target.dataset.manuallyEdited = e.target.value ? '1' : '';
+});
+
+// ── Data loading ──────────────────────────────
+async function loadAndRender() {
+  const r = await fetch('/admin/api/tricks', { headers: authH() }).catch(() => null);
+  if (r && r.ok) {
+    renderTricks(await r.json());
+  } else {
+    document.getElementById('tricks-tbody').innerHTML =
+      '<tr><td colspan="5" class="table-msg" style="color:var(--danger)">Failed to load tricks.</td></tr>';
+  }
+}
+
+// ── Auth flow ─────────────────────────────────
+async function checkAuth() {
+  const t = token();
+  if (!t) { showLogin(); return; }
+  if (await verifyAdmin(t)) {
+    const me  = await fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+    const usr = (me && me.ok) ? (await me.json()).username : '';
+    showApp(usr);
+    loadAndRender();
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    showLogin();
+  }
+}
+
+document.getElementById('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  const fd = new FormData(e.target);
+  const r  = await fetch('/game/api/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
+  }).catch(() => null);
+  if (!r) { errEl.textContent = 'Network error.'; return; }
+  const data = await r.json();
+  if (!r.ok) { errEl.textContent = data.error || 'Login failed.'; return; }
+  localStorage.setItem(TOKEN_KEY, data.token);
+  if (await verifyAdmin(data.token)) {
+    const me = await fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + data.token } }).catch(() => null);
+    const usr = (me && me.ok) ? (await me.json()).username : '';
+    showApp(usr);
+    loadAndRender();
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    errEl.textContent = 'Account does not have admin access.';
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  const t = token();
+  if (t) {
+    await fetch('/game/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + t } }).catch(() => {});
+    localStorage.removeItem(TOKEN_KEY);
+  }
+  showLogin();
+});
+
+checkAuth();
+</script>
+</body>
+</html>

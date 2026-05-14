@@ -69,6 +69,11 @@ def embed_page():
     return render_template('admin/embed.html')
 
 
+@admin.route('/tricks')
+def tricks_page():
+    return render_template('admin/tricks.html')
+
+
 # ──────────────────────────────────────────────
 # CORS preflight for /admin/api/*
 # ──────────────────────────────────────────────
@@ -249,6 +254,34 @@ def revoke_key(key_id):
 # ──────────────────────────────────────────────
 # /admin/api/tricks
 # ──────────────────────────────────────────────
+@admin.route('/api/tricks', methods=['GET'])
+@require_admin
+def list_tricks():
+    db = get_db()
+    tricks = db.execute('SELECT id, name, created_at FROM tricks ORDER BY name').fetchall()
+    counts = {
+        row['trick']: row['cnt']
+        for row in db.execute(
+            'SELECT trick, COUNT(*) AS cnt FROM recordings GROUP BY trick'
+        ).fetchall()
+    }
+    refs = {
+        row['trick']: {'id': row['recording_id'], 'samples': json.loads(row['samples']),
+                       'duration_ms': row['duration_ms'], 'sample_count': row['sample_count']}
+        for row in db.execute(
+            '''SELECT rr.trick, rr.recording_id, r.samples, r.duration_ms, r.sample_count
+               FROM reference_recordings rr JOIN recordings r ON rr.recording_id = r.id'''
+        ).fetchall()
+    }
+    result = []
+    for t in tricks:
+        entry = dict(t)
+        entry['recording_count'] = counts.get(t['id'], 0)
+        entry['reference'] = refs.get(t['id'])
+        result.append(entry)
+    return jsonify(result)
+
+
 @admin.route('/api/tricks', methods=['POST'])
 @require_admin
 def create_trick():
