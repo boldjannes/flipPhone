@@ -56,13 +56,7 @@ function _gsClearFooter() {
   f.classList.remove("active");
 }
 
-function _gsShowFooter(actionsEl) {
-  const f = GS.footer();
-  if (!f) return;
-  f.innerHTML = "";
-  f.appendChild(actionsEl);
-  f.classList.add("active");
-}
+
 
 // ──────────────────────────────────────────────
 // DOM helpers
@@ -222,6 +216,7 @@ export function closeGame() {
   _gsRecording = false;
   GS.overlay().classList.add("hidden");
   GS.content().innerHTML = "";
+  _gsClearFooter();
 
   // Refresh home
   if (typeof gamePoller !== "undefined" && gamePoller) gamePoller.poll();
@@ -253,6 +248,7 @@ export function _gsRenderSetter(game) {
   _gsStopAnims();
   const c = GS.content();
   c.innerHTML = "";
+  _gsClearFooter();
 
   // Back button
   c.appendChild(_gsBackBtn());
@@ -296,24 +292,28 @@ export function _gsRenderSetter(game) {
   status.id = "gs-status";
   c.appendChild(status);
 
-  // Action area
-  const actions = _gs("div", "gs-actions");
-
   const recordBtn = _gs("button", "gs-record-btn");
   recordBtn.id = "gs-record-btn";
   recordBtn.textContent = "Trick aufnehmen";
   recordBtn.addEventListener("click", () => _gsSetterToggleRecord());
-  actions.appendChild(recordBtn);
+
+  const footerFrag = document.createDocumentFragment();
+  footerFrag.appendChild(recordBtn);
 
   if (_gsLine.length >= 1) {
     const submitBtn = _gs("button", "gs-submit-btn accent-btn");
     submitBtn.id = "gs-submit-line-btn";
     submitBtn.textContent = "Line absenden";
     submitBtn.addEventListener("click", () => _gsSetterSubmit());
-    actions.appendChild(submitBtn);
+    footerFrag.appendChild(submitBtn);
   }
 
-  c.appendChild(actions);
+  const footerEl = GS.footer();
+  if (footerEl) {
+    footerEl.innerHTML = "";
+    footerEl.appendChild(footerFrag);
+    footerEl.classList.add("active");
+  }
 }
 
 export async function _gsSetterToggleRecord() {
@@ -377,6 +377,7 @@ export function _gsShowReplay(samples, trick, mode) {
   _gsStopAnims();
   const c = GS.content();
   c.innerHTML = "";
+  _gsClearFooter();
 
   const name = trick.replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
 
@@ -454,6 +455,7 @@ export function _gsRenderMatcher(game) {
   _gsStopAnims();
   const c = GS.content();
   c.innerHTML = "";
+  _gsClearFooter();
   _gsMatchIndex = 0;
   _gsMatchFailed = false;
 
@@ -507,13 +509,17 @@ export function _gsRenderMatcher(game) {
   c.appendChild(status);
 
   // Record button
-  const actions = _gs("div", "gs-actions");
   const recordBtn = _gs("button", "gs-record-btn");
   recordBtn.id = "gs-record-btn";
   recordBtn.textContent = "Trick aufnehmen";
   recordBtn.addEventListener("click", () => _gsMatcherToggleRecord());
-  actions.appendChild(recordBtn);
-  c.appendChild(actions);
+
+  const footerEl = GS.footer();
+  if (footerEl) {
+    footerEl.innerHTML = "";
+    footerEl.appendChild(recordBtn);
+    footerEl.classList.add("active");
+  }
 }
 
 export function _gsTrickRef(trickId, samples) {
@@ -674,6 +680,7 @@ export async function _gsMatcherSubmit(success) {
 export function _gsRenderResult(prevGame, newGame, success) {
   const c = GS.content();
   c.innerHTML = "";
+  _gsClearFooter();
 
   const wrap = _gs("div", "gs-result-wrap");
 
@@ -740,6 +747,7 @@ export function _gsRenderResult(prevGame, newGame, success) {
 export function _gsRenderWaiting(game) {
   const c = GS.content();
   c.innerHTML = "";
+  _gsClearFooter();
 
   c.appendChild(_gsBackBtn());
   c.appendChild(_gsSkateBar(game));
@@ -807,6 +815,7 @@ export function _gsRenderWaiting(game) {
 export function _gsRenderFinished(game) {
   const c = GS.content();
   c.innerHTML = "";
+  _gsClearFooter();
 
   const me = _gsMyId();
   const won = game.winner_id === me;
