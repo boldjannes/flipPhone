@@ -114,7 +114,7 @@ function _buildRenderer(canvas) {
 }
 
 // MODEL_ROTATION: adjust until board appears in correct neutral pose.
-const MODEL_ROTATION = new THREE.Euler(Math.PI / 2, 0, Math.PI / 2);
+const MODEL_ROTATION = new THREE.Euler(Math.PI / 2, 0, 0);
 
 function _cloneModel(gltf, scene) {
   const pivot = new THREE.Group();
