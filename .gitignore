@@ -208,3 +208,17 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Node / Vite
+node_modules/
+static/dist/
+
+# Logs
+logs/
+
+# SQLite WAL files
+*.db-wal
+*.db-shm
+
+# macOS
+.DS_Store

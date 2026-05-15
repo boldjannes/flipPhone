@@ -1,9 +1,11 @@
 "use strict";
 
+import { SensorKit } from "../shared/sensor.js";
+
 // ──────────────────────────────────────────────
 // State
 // ──────────────────────────────────────────────
-const state = {
+export const state = {
   isRecording: false,
   samples: [],
   recordingStart: null,
@@ -14,27 +16,27 @@ const state = {
 // ──────────────────────────────────────────────
 // DOM refs
 // ──────────────────────────────────────────────
-const $ = (id) => document.getElementById(id);
+export const $ = (id) => document.getElementById(id);
 
-const recordBtn = $("pg-record-btn");
-const timerDisplay = $("pg-timer-display");
-const statusMsg = $("pg-status-msg");
-const sensorHint = $("pg-sensor-hint");
-const permissionBanner = $("pg-permission-banner");
-const requestPermBtn = $("pg-request-permission-btn");
-const resultsCard = $("pg-results-card");
-const trickName = $("pg-trick-name");
-const confidence = $("pg-confidence");
-const chart = $("pg-chart");
-const toast = $("toast");
+export const recordBtn = $("pg-record-btn");
+export const timerDisplay = $("pg-timer-display");
+export const statusMsg = $("pg-status-msg");
+export const sensorHint = $("pg-sensor-hint");
+export const permissionBanner = $("pg-permission-banner");
+export const requestPermBtn = $("pg-request-permission-btn");
+export const resultsCard = $("pg-results-card");
+export const trickName = $("pg-trick-name");
+export const confidence = $("pg-confidence");
+export const chart = $("pg-chart");
+export const toast = $("toast");
 
 // ──────────────────────────────────────────────
 // Sensor handling
 // ──────────────────────────────────────────────
-let latestAcc = { x: 0, y: 0, z: 0 };
-let latestGyr = { x: 0, y: 0, z: 0 };
+export let latestAcc = { x: 0, y: 0, z: 0 };
+export let latestGyr = { x: 0, y: 0, z: 0 };
 
-function onMotion(e) {
+export function onMotion(e) {
   const acc = e.accelerationIncludingGravity || e.acceleration || {};
   const gyr = e.rotationRate || {};
 
@@ -59,7 +61,7 @@ function onMotion(e) {
   }
 }
 
-function attachMotionListener() {
+export function attachMotionListener() {
   let gotRealData = false;
   let checkTimeout = null;
 
@@ -102,7 +104,7 @@ function attachMotionListener() {
   state.sensorReady = true;
 }
 
-async function requestSensorPermission() {
+export async function requestSensorPermission() {
   if (
     typeof DeviceMotionEvent !== "undefined" &&
     typeof DeviceMotionEvent.requestPermission === "function"
@@ -122,7 +124,7 @@ async function requestSensorPermission() {
   }
 }
 
-function initSensors() {
+export function initSensors() {
   if (typeof DeviceMotionEvent === "undefined") {
     sensorHint.classList.remove("hidden");
     statusMsg.textContent = "No motion sensors on this device.";
@@ -168,7 +170,7 @@ function initSensors() {
 // ──────────────────────────────────────────────
 // Recording
 // ──────────────────────────────────────────────
-function startRecording() {
+export function startRecording() {
   if (!state.sensorReady) {
     showToast("Enable sensors first!");
     return;
@@ -187,7 +189,7 @@ function startRecording() {
   state.timerInterval = setInterval(updateTimer, 100);
 }
 
-function stopRecording() {
+export function stopRecording() {
   state.isRecording = false;
   clearInterval(state.timerInterval);
 
@@ -206,7 +208,7 @@ function stopRecording() {
   submitPrediction();
 }
 
-function updateTimer() {
+export function updateTimer() {
   const elapsed = Date.now() - state.recordingStart;
   const tenths = Math.floor((elapsed % 1000) / 100);
   const secs = Math.floor(elapsed / 1000) % 60;
@@ -217,7 +219,7 @@ function updateTimer() {
 // ──────────────────────────────────────────────
 // Prediction API
 // ──────────────────────────────────────────────
-async function submitPrediction() {
+export async function submitPrediction() {
   statusMsg.textContent = "Analyzing…";
   resultsCard.classList.add("hidden");
 
@@ -241,7 +243,7 @@ async function submitPrediction() {
 // ──────────────────────────────────────────────
 // Results
 // ──────────────────────────────────────────────
-function renderResults(result) {
+export function renderResults(result) {
   trickName.textContent = result.trick;
   confidence.textContent = (result.confidence * 100).toFixed(1) + "% confidence";
 
@@ -269,15 +271,15 @@ function renderResults(result) {
   statusMsg.textContent = "Record again to try another trick!";
 }
 
-function escapeHtml(str) {
+export function escapeHtml(str) {
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // ──────────────────────────────────────────────
 // Toast
 // ──────────────────────────────────────────────
-let toastTimeout = null;
-function showToast(msg) {
+export let toastTimeout = null;
+export function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add("show");
   clearTimeout(toastTimeout);
@@ -287,7 +289,7 @@ function showToast(msg) {
 // ──────────────────────────────────────────────
 // Init
 // ──────────────────────────────────────────────
-function init() {
+export function init() {
   initSensors();
   recordBtn.addEventListener("click", () => {
     if (state.isRecording) stopRecording();

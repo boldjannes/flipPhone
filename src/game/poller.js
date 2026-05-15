@@ -1,5 +1,8 @@
 "use strict";
 
+import { getToken } from "./auth.js";
+import { requestNotificationPermission, PollNotifier } from "./notifications.js";
+
 /**
  * GamePoller — smart polling for Game of Skate.
  *
@@ -22,7 +25,7 @@
  *   });
  *   poller.start();
  */
-class GamePoller {
+export class GamePoller {
   static INTERVAL_ACTIVE = 3000;
   static INTERVAL_IDLE = 60000;
   static INTERVAL_HIDDEN = 30000;

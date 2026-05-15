@@ -1,5 +1,8 @@
 "use strict";
 
+import { getToken, getCachedUser } from "./auth.js";
+import { openGame } from "./game-screen.js";
+
 /**
  * Home tab — renders game overview after login.
  *
@@ -14,44 +17,44 @@
  *   - updateHome(data)    from GamePoller.onUpdate
  */
 
-const SKATE_WORD = "SKATE";
+export const SKATE_WORD = "SKATE";
 
 // ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────
 
-function _h(tag, cls, text) {
+export function _h(tag, cls, text) {
   const el = document.createElement(tag);
   if (cls) el.className = cls;
   if (text !== undefined) el.textContent = text;
   return el;
 }
 
-function _avatar(user, size) {
+export function _avatar(user, size) {
   const name = user.display_name || user.username;
   const el = _h("div", "avatar-circle" + (size ? ` avatar-${size}` : ""));
   el.textContent = name.slice(0, 2).toUpperCase();
   return el;
 }
 
-function _myUserId() {
+export function _myUserId() {
   const u = getCachedUser();
   return u ? u.id : null;
 }
 
-function _opponent(game) {
+export function _opponent(game) {
   const me = _myUserId();
   return game.challenger.id === me ? game.opponent : game.challenger;
 }
 
-function _myLetters(game) {
+export function _myLetters(game) {
   const me = _myUserId();
   return game.challenger.id === me
     ? game.challenger_letters
     : game.opponent_letters;
 }
 
-function _opponentLetters(game) {
+export function _opponentLetters(game) {
   const me = _myUserId();
   return game.challenger.id === me
     ? game.opponent_letters
@@ -62,7 +65,7 @@ function _opponentLetters(game) {
 // SKATE letters visual
 // ──────────────────────────────────────────────
 
-function renderSkateLetters(letters, labelPrefix) {
+export function renderSkateLetters(letters, labelPrefix) {
   const wrap = _h("div", "skate-letters");
   if (labelPrefix) {
     const lbl = _h("span", "skate-label", labelPrefix);
@@ -83,7 +86,7 @@ function renderSkateLetters(letters, labelPrefix) {
 // Game card
 // ──────────────────────────────────────────────
 
-function renderGameCard(game, isMyTurn) {
+export function renderGameCard(game, isMyTurn) {
   const opp = _opponent(game);
   const card = _h("div", "home-game-card");
 
@@ -121,7 +124,7 @@ function renderGameCard(game, isMyTurn) {
   if (isMyTurn) {
     const btn = _h("button", "home-game-btn accent-btn");
     btn.textContent = game.current_role === "setter" ? "Trick zeigen" : "Nachmachen";
-    btn.addEventListener("click", () => navigateToGame(game.id));
+    btn.addEventListener("click", () => openGame(game.id));
     card.appendChild(btn);
   }
 
@@ -132,7 +135,7 @@ function renderGameCard(game, isMyTurn) {
 // Invitation card
 // ──────────────────────────────────────────────
 
-function renderInvitationCard(game) {
+export function renderInvitationCard(game) {
   const opp = game.challenger;
   const card = _h("div", "home-invite-card");
 
@@ -196,7 +199,7 @@ function renderInvitationCard(game) {
 // Sent invitation card
 // ──────────────────────────────────────────────
 
-function renderSentInvitationCard(game) {
+export function renderSentInvitationCard(game) {
   const opp = game.opponent;
   const card = _h("div", "home-sent-invite-card");
 
@@ -215,7 +218,7 @@ function renderSentInvitationCard(game) {
 // Friend scroller (challenge)
 // ──────────────────────────────────────────────
 
-function renderFriendScroller(friends) {
+export function renderFriendScroller(friends) {
   const scroller = _h("div", "home-friend-scroller");
   if (!friends || !friends.length) {
     scroller.appendChild(
@@ -270,7 +273,7 @@ function renderFriendScroller(friends) {
 // Render home sections
 // ──────────────────────────────────────────────
 
-function renderHome(data, friends) {
+export function renderHome(data, friends) {
   const container = document.getElementById("home-content");
   if (!container) return;
   container.innerHTML = "";
@@ -349,10 +352,10 @@ function renderHome(data, friends) {
 // Public API
 // ──────────────────────────────────────────────
 
-let _cachedHomeData = null;
-let _cachedHomeFriends = null;
+export let _cachedHomeData = null;
+export let _cachedHomeFriends = null;
 
-async function loadHomeTab() {
+export async function loadHomeTab() {
   const token = getToken();
   if (!token) return;
 
@@ -378,7 +381,7 @@ async function loadHomeTab() {
 }
 
 /** Called by poller onUpdate — only re-renders if home tab is active. */
-function updateHome(data) {
+export function updateHome(data) {
   _cachedHomeData = data;
   const homeTab = document.getElementById("tab-home");
   if (homeTab && homeTab.classList.contains("active")) {
@@ -387,7 +390,7 @@ function updateHome(data) {
 }
 
 /** Refresh friend list cache (called after friend changes). */
-async function refreshHomeFriends() {
+export async function refreshHomeFriends() {
   const token = getToken();
   if (!token) return;
   try {

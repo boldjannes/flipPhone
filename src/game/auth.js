@@ -1,27 +1,27 @@
 "use strict";
 
-const AUTH_API = "/game/api/auth";
-const TOKEN_KEY = "fp_game_token";
-const USER_KEY = "fp_game_user";
+export const AUTH_API = "/game/api/auth";
+export const TOKEN_KEY = "fp_game_token";
+export const USER_KEY = "fp_game_user";
 
 // ──────────────────────────────────────────────
 // Storage
 // ──────────────────────────────────────────────
-function getToken() {
+export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
 
-function setSession(token, user) {
+export function setSession(token, user) {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
-function clearSession() {
+export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
 
-function getCachedUser() {
+export function getCachedUser() {
   try {
     return JSON.parse(localStorage.getItem(USER_KEY));
   } catch {
@@ -32,14 +32,14 @@ function getCachedUser() {
 // ──────────────────────────────────────────────
 // API calls
 // ──────────────────────────────────────────────
-async function authFetch(path, opts = {}) {
+export async function authFetch(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
   return fetch(AUTH_API + path, { ...opts, headers });
 }
 
-async function register(username, password, displayName) {
+export async function register(username, password, displayName) {
   const body = { username, password };
   if (displayName) body.display_name = displayName;
   const resp = await authFetch("/register", {
@@ -52,7 +52,7 @@ async function register(username, password, displayName) {
   return data;
 }
 
-async function login(username, password) {
+export async function login(username, password) {
   const resp = await authFetch("/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
@@ -63,12 +63,12 @@ async function login(username, password) {
   return data;
 }
 
-async function logout() {
+export async function logout() {
   await authFetch("/logout", { method: "POST" }).catch(() => {});
   clearSession();
 }
 
-async function getCurrentUser() {
+export async function getCurrentUser() {
   const resp = await authFetch("/me");
   if (!resp.ok) {
     clearSession();
@@ -79,7 +79,7 @@ async function getCurrentUser() {
   return user;
 }
 
-async function checkUsername(username) {
+export async function checkUsername(username) {
   const resp = await authFetch("/check-username", {
     method: "POST",
     body: JSON.stringify({ username }),
@@ -87,22 +87,22 @@ async function checkUsername(username) {
   return resp.json();
 }
 
-function isLoggedIn() {
+export function isLoggedIn() {
   return !!getToken();
 }
 
 // ──────────────────────────────────────────────
 // UI
 // ──────────────────────────────────────────────
-const $ = (id) => document.getElementById(id);
+export const $ = (id) => document.getElementById(id);
 
-function showAuth() {
+export function showAuth() {
   $("auth-screen").classList.remove("hidden");
   $("app-shell").classList.add("hidden");
   switchTab("login");
 }
 
-function switchTab(tab) {
+export function switchTab(tab) {
   document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === tab);
   });
@@ -111,16 +111,16 @@ function switchTab(tab) {
   clearErrors();
 }
 
-function clearErrors() {
+export function clearErrors() {
   document.querySelectorAll(".auth-error").forEach((el) => (el.textContent = ""));
 }
 
-function setError(formId, msg) {
+export function setError(formId, msg) {
   const el = document.querySelector(`#${formId} .auth-error`);
   if (el) el.textContent = msg;
 }
 
-function setLoading(btn, loading) {
+export function setLoading(btn, loading) {
   btn.disabled = loading;
   btn.dataset.origText = btn.dataset.origText || btn.textContent;
   btn.textContent = loading ? "..." : btn.dataset.origText;
@@ -129,8 +129,8 @@ function setLoading(btn, loading) {
 // ──────────────────────────────────────────────
 // Username live check (debounced)
 // ──────────────────────────────────────────────
-let checkTimer = null;
-function setupUsernameCheck() {
+export let checkTimer = null;
+export function setupUsernameCheck() {
   const input = $("reg-username");
   const hint = $("reg-username-hint");
   if (!input || !hint) return;
@@ -181,7 +181,7 @@ function setupUsernameCheck() {
 // ──────────────────────────────────────────────
 // Form handlers
 // ──────────────────────────────────────────────
-function setupForms() {
+export function setupForms() {
   // Tab switching
   document.querySelectorAll(".auth-tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -249,7 +249,7 @@ function setupForms() {
 // ──────────────────────────────────────────────
 // App shell
 // ──────────────────────────────────────────────
-function loadApp() {
+export function loadApp() {
   $("auth-screen").classList.add("hidden");
   $("app-shell").classList.remove("hidden");
 
@@ -260,7 +260,7 @@ function loadApp() {
   }
 }
 
-async function init() {
+export async function init() {
   setupForms();
 
   if (!isLoggedIn()) {

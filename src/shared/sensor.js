@@ -16,7 +16,7 @@
  *   SensorKit.isRecording()          – true while collecting
  *   SensorKit.latest()               – { acc, gyr } latest readings
  */
-const SensorKit = (() => {
+export const SensorKit = (() => {
   let ready = false;
   let recording = false;
   let samples = [];

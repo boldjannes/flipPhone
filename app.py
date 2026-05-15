@@ -24,8 +24,10 @@ python app.py runserver --port 8080
 
 Environment variables
 ---------------------
-FLIPPHONE_DB   Path to the SQLite database file (default: flipphone.db)
-PORT           Port to listen on when running without --port (default: 5000)
+FLIPPHONE_DB             Path to the SQLite database file (default: flipphone.db)
+FLIPPHONE_ALLOWED_ORIGIN CORS allowed origin, e.g. https://flip.example.com (default: *)
+FLIPPHONE_PREDICT_RATE   Rate limit for /api/predict, e.g. "10 per minute" (default: "30 per minute")
+PORT                     Port to listen on when running without --port (default: 5000)
 """
 
 import argparse
@@ -38,11 +40,21 @@ import traceback
 import urllib.error
 import urllib.request
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from flask import Flask, jsonify, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from database import DB_PATH, close_db, generate_key, init_db, now_iso
 
+PREDICT_RATE_LIMIT = os.environ.get('FLIPPHONE_PREDICT_RATE', '30 per minute')
+
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+
 PREDICTION_API_URL = os.environ.get('PREDICTION_API_URL', 'http://localhost:8000')
+ALLOWED_ORIGIN    = os.environ.get('FLIPPHONE_ALLOWED_ORIGIN', '*')
 LOG_DIR = os.environ.get('FLIPPHONE_LOG_DIR', 'logs')
 LOG_LEVEL = os.environ.get('FLIPPHONE_LOG_LEVEL', 'INFO').upper()
 
@@ -94,6 +106,7 @@ def create_app():
     )
 
     log = _setup_logging(app)
+    limiter.init_app(app)
     init_db()
 
     # Register teardown
@@ -123,13 +136,19 @@ def create_app():
     # ── CORS ──
     @app.after_request
     def add_cors(response):
-        response.headers['Access-Control-Allow-Origin'] = '*'
+        origin = request.headers.get('Origin', '')
+        if ALLOWED_ORIGIN == '*':
+            response.headers['Access-Control-Allow-Origin'] = '*'
+        elif origin == ALLOWED_ORIGIN:
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Vary'] = 'Origin'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-API-Key, Authorization'
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
         return response
 
     # ── Predict proxy (stays at /api/predict, no auth) ──
     @app.route('/api/predict', methods=['POST'])
+    @limiter.limit(PREDICT_RATE_LIMIT)
     def proxy_predict():
         data = request.get_data()
         target = PREDICTION_API_URL.rstrip('/') + '/api/predict'

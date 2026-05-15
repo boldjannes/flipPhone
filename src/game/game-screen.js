@@ -1,5 +1,9 @@
 "use strict";
 
+import { getToken, getCachedUser } from "./auth.js";
+import { GameRecorder } from "./game-recorder.js";
+import { SensorKit } from "../shared/sensor.js";
+
 /**
  * Game Screen — fullscreen overlay for active gameplay.
  *
@@ -15,7 +19,7 @@
 // ──────────────────────────────────────────────
 // Trick reference hints (matcher screen)
 // ──────────────────────────────────────────────
-const TRICK_HINTS = {
+export const TRICK_HINTS = {
   kickflip:       "Fuß an der Nose-Seite. Kick nach vorne-außen — Board dreht über die Längsachse.",
   heelflip:       "Ferse schiebt nach vorne-innen — Board dreht zur Heel-Seite (entgegengesetzt zum Kickflip).",
   fs_shuvit:      "Kein Flip. Board dreht 180° backside (Nose nach vorne). Frontside Pop.",
@@ -29,15 +33,15 @@ const TRICK_HINTS = {
 // ──────────────────────────────────────────────
 // State
 // ──────────────────────────────────────────────
-let _gsGameId = null;
-let _gsGame = null;
-let _gsRecorder = null;
-let _gsLine = [];
-let _gsRecording = false;
-let _gsSubmitting = false;
-let _gsWaitTimer = null;
+export let _gsGameId = null;
+export let _gsGame = null;
+export let _gsRecorder = null;
+export let _gsLine = [];
+export let _gsRecording = false;
+export let _gsSubmitting = false;
+export let _gsWaitTimer = null;
 
-const GS = {
+export const GS = {
   overlay: () => document.getElementById("game-screen"),
   content: () => document.getElementById("gs-content"),
 };
@@ -45,36 +49,36 @@ const GS = {
 // ──────────────────────────────────────────────
 // DOM helpers
 // ──────────────────────────────────────────────
-function _gs(tag, cls, text) {
+export function _gs(tag, cls, text) {
   const el = document.createElement(tag);
   if (cls) el.className = cls;
   if (text !== undefined) el.textContent = text;
   return el;
 }
 
-function _gsAvatar(user) {
+export function _gsAvatar(user) {
   const name = user.display_name || user.username;
   const el = _gs("div", "gs-avatar");
   el.textContent = name.slice(0, 2).toUpperCase();
   return el;
 }
 
-function _gsMyId() {
+export function _gsMyId() {
   const u = getCachedUser();
   return u ? u.id : null;
 }
 
-function _gsOpponent(game) {
+export function _gsOpponent(game) {
   const me = _gsMyId();
   return game.challenger.id === me ? game.opponent : game.challenger;
 }
 
-function _gsMyLetters(game) {
+export function _gsMyLetters(game) {
   const me = _gsMyId();
   return game.challenger.id === me ? game.challenger_letters : game.opponent_letters;
 }
 
-function _gsOppLetters(game) {
+export function _gsOppLetters(game) {
   const me = _gsMyId();
   return game.challenger.id === me ? game.opponent_letters : game.challenger_letters;
 }
@@ -82,7 +86,7 @@ function _gsOppLetters(game) {
 // ──────────────────────────────────────────────
 // SKATE stand bar (shared by all sub-screens)
 // ──────────────────────────────────────────────
-function _gsSkateBar(game) {
+export function _gsSkateBar(game) {
   const bar = _gs("div", "gs-skate-bar");
   const me = getCachedUser();
   const opp = _gsOpponent(game);
@@ -105,7 +109,7 @@ function _gsSkateBar(game) {
   return bar;
 }
 
-function _gsSkateLetters(letters) {
+export function _gsSkateLetters(letters) {
   const wrap = _gs("div", "gs-skate-letters");
   const word = "SKATE";
   for (let i = 0; i < word.length; i++) {
@@ -119,7 +123,7 @@ function _gsSkateLetters(letters) {
 // ──────────────────────────────────────────────
 // Trick pill
 // ──────────────────────────────────────────────
-function _gsTrickPill(trick, state) {
+export function _gsTrickPill(trick, state) {
   // state: "pending" | "current" | "done" | "failed"
   const pill = _gs("div", `gs-trick-pill gs-pill-${state}`);
   const label = trick.replace(/_/g, " ");
@@ -133,14 +137,14 @@ function _gsTrickPill(trick, state) {
   return pill;
 }
 
-function _esc(s) {
+export function _esc(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // ──────────────────────────────────────────────
 // Open game screen
 // ──────────────────────────────────────────────
-async function openGame(gameId) {
+export async function openGame(gameId) {
   _gsGameId = gameId;
   _gsLine = [];
   _gsRecording = false;
@@ -172,7 +176,7 @@ async function openGame(gameId) {
   _gsRender();
 }
 
-function closeGame() {
+export function closeGame() {
   if (_gsRecorder) _gsRecorder.abort();
   if (_gsWaitTimer) { clearInterval(_gsWaitTimer); _gsWaitTimer = null; }
   _gsGameId = null;
@@ -189,7 +193,7 @@ function closeGame() {
 // ──────────────────────────────────────────────
 // Route to correct sub-screen
 // ──────────────────────────────────────────────
-function _gsRender() {
+export function _gsRender() {
   const game = _gsGame;
   if (!game) return;
   const me = _gsMyId();
@@ -208,7 +212,7 @@ function _gsRender() {
 // ──────────────────────────────────────────────
 // Sub-Screen A: Setter
 // ──────────────────────────────────────────────
-function _gsRenderSetter(game) {
+export function _gsRenderSetter(game) {
   const c = GS.content();
   c.innerHTML = "";
 
@@ -274,7 +278,7 @@ function _gsRenderSetter(game) {
   c.appendChild(actions);
 }
 
-async function _gsSetterToggleRecord() {
+export async function _gsSetterToggleRecord() {
   const btn = document.getElementById("gs-record-btn");
   const status = document.getElementById("gs-status");
   if (!btn) return;
@@ -328,7 +332,7 @@ async function _gsSetterToggleRecord() {
   }
 }
 
-async function _gsSetterSubmit() {
+export async function _gsSetterSubmit() {
   if (_gsSubmitting || _gsLine.length === 0) return;
   _gsSubmitting = true;
 
@@ -365,10 +369,10 @@ async function _gsSetterSubmit() {
 // ──────────────────────────────────────────────
 // Sub-Screen B: Matcher
 // ──────────────────────────────────────────────
-let _gsMatchIndex = 0;
-let _gsMatchFailed = false;
+export let _gsMatchIndex = 0;
+export let _gsMatchFailed = false;
 
-function _gsRenderMatcher(game) {
+export function _gsRenderMatcher(game) {
   const c = GS.content();
   c.innerHTML = "";
   _gsMatchIndex = 0;
@@ -431,7 +435,7 @@ function _gsRenderMatcher(game) {
   c.appendChild(actions);
 }
 
-function _gsTrickRef(trickId) {
+export function _gsTrickRef(trickId) {
   const name = trickId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   const hint = TRICK_HINTS[trickId] || "";
   const card = _gs("div", "gs-trick-ref");
@@ -442,7 +446,7 @@ function _gsTrickRef(trickId) {
   return card;
 }
 
-async function _gsMatcherToggleRecord() {
+export async function _gsMatcherToggleRecord() {
   const game = _gsGame;
   const line = game.current_line || [];
   const btn = document.getElementById("gs-record-btn");
@@ -514,7 +518,7 @@ async function _gsMatcherToggleRecord() {
   }
 }
 
-function _gsUpdateMatchPills(line, failIdx) {
+export function _gsUpdateMatchPills(line, failIdx) {
   const wrap = document.getElementById("gs-match-line");
   if (!wrap) return;
   wrap.innerHTML = "";
@@ -528,7 +532,7 @@ function _gsUpdateMatchPills(line, failIdx) {
   });
 }
 
-async function _gsMatcherSubmit(success) {
+export async function _gsMatcherSubmit(success) {
   if (_gsSubmitting) return;
   _gsSubmitting = true;
 
@@ -567,7 +571,7 @@ async function _gsMatcherSubmit(success) {
 // ──────────────────────────────────────────────
 // Result Overlay
 // ──────────────────────────────────────────────
-function _gsRenderResult(prevGame, newGame, success) {
+export function _gsRenderResult(prevGame, newGame, success) {
   const c = GS.content();
   c.innerHTML = "";
 
@@ -633,7 +637,7 @@ function _gsRenderResult(prevGame, newGame, success) {
 // ──────────────────────────────────────────────
 // Sub-Screen C: Waiting
 // ──────────────────────────────────────────────
-function _gsRenderWaiting(game) {
+export function _gsRenderWaiting(game) {
   const c = GS.content();
   c.innerHTML = "";
 
@@ -700,7 +704,7 @@ function _gsRenderWaiting(game) {
 // ──────────────────────────────────────────────
 // Sub-Screen: Finished (opened from home)
 // ──────────────────────────────────────────────
-function _gsRenderFinished(game) {
+export function _gsRenderFinished(game) {
   const c = GS.content();
   c.innerHTML = "";
 
@@ -731,7 +735,7 @@ function _gsRenderFinished(game) {
 // ──────────────────────────────────────────────
 // Detection feedback flash
 // ──────────────────────────────────────────────
-function _gsShowDetectFlash(trick, confidence, ok) {
+export function _gsShowDetectFlash(trick, confidence, ok) {
   const status = document.getElementById("gs-status");
   if (!status) return;
 
@@ -749,7 +753,7 @@ function _gsShowDetectFlash(trick, confidence, ok) {
 // ──────────────────────────────────────────────
 // Back button
 // ──────────────────────────────────────────────
-function _gsBackBtn() {
+export function _gsBackBtn() {
   const btn = _gs("button", "gs-back-btn", "\u2190 Zur\u00fcck");
   btn.addEventListener("click", () => closeGame());
   return btn;

@@ -231,7 +231,7 @@ def row_to_dict(row):
 def require_api_key(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        key = request.headers.get('X-API-Key') or request.args.get('api_key', '')
+        key = request.headers.get('X-API-Key', '')
         if not key:
             return jsonify({'error': 'API key required'}), 401
         row = get_db().execute(
@@ -299,7 +299,7 @@ def require_admin(f):
 
 
 def require_admin_or_key(f):
-    """Accepts Bearer token (admin role) OR an admin API key via X-API-Key header / ?api_key= param."""
+    """Accepts Bearer token (admin role) OR an admin API key via X-API-Key header."""
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.headers.get('Authorization', '')
@@ -308,7 +308,7 @@ def require_admin_or_key(f):
             if row and row['role'] == 'admin':
                 g.game_user = row
                 return f(*args, **kwargs)
-        key = request.headers.get('X-API-Key') or request.args.get('api_key', '')
+        key = request.headers.get('X-API-Key', '')
         if key:
             row = get_db().execute(
                 'SELECT * FROM api_keys WHERE key = ? AND is_admin = 1', (key,)

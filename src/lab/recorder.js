@@ -1,10 +1,12 @@
 "use strict";
 
-// ─── State ─────────────────────────────────────
-let TRICKS = [];
-let references = {};
+import { computeOrientations, getQAtTime, drawPhone3D } from "../shared/phone-animation.js";
 
-const state = {
+// ─── State ─────────────────────────────────────
+export let TRICKS = [];
+export let references = {};
+
+export const state = {
   selectedTrick: null,
   isRecording: false,
   samples: [],
@@ -15,13 +17,13 @@ const state = {
 };
 
 // ─── DOM ───────────────────────────────────────
-const $ = id => document.getElementById(id);
+export const $ = id => document.getElementById(id);
 
 // ─── Auth ──────────────────────────────────────
-function getToken() { return localStorage.getItem('fp_game_token') || ''; }
+export function getToken() { return localStorage.getItem('fp_game_token') || ''; }
 
 // ─── Tricks ────────────────────────────────────
-async function loadTricks() {
+export async function loadTricks() {
   try {
     const r = await fetch('/game/api/tricks');
     if (r.ok) TRICKS = (await r.json()).map(t => t.name);
@@ -32,7 +34,7 @@ async function loadTricks() {
   }
 }
 
-function buildTrickGrid() {
+export function buildTrickGrid() {
   const grid = $('trick-grid');
   grid.innerHTML = '';
   TRICKS.forEach(trick => {
@@ -44,7 +46,7 @@ function buildTrickGrid() {
   });
 }
 
-function selectTrick(trick) {
+export function selectTrick(trick) {
   if (state.isRecording) return;
   state.selectedTrick = trick;
   window._selectedTrick = trick;
@@ -55,10 +57,10 @@ function selectTrick(trick) {
 }
 
 // ─── Sensor ────────────────────────────────────
-let latestAcc = { x: 0, y: 0, z: 0 };
-let latestGyr = { x: 0, y: 0, z: 0 };
+export let latestAcc = { x: 0, y: 0, z: 0 };
+export let latestGyr = { x: 0, y: 0, z: 0 };
 
-function onMotion(e) {
+export function onMotion(e) {
   const acc = e.accelerationIncludingGravity || e.acceleration || {};
   const gyr = e.rotationRate || {};
   latestAcc = { x: acc.x ?? 0, y: acc.y ?? 0, z: acc.z ?? 0 };
@@ -77,7 +79,7 @@ function onMotion(e) {
   }
 }
 
-function attachMotionListener() {
+export function attachMotionListener() {
   let gotData = false;
   let timeout = null;
   function wrapped(e) {
@@ -103,7 +105,7 @@ function attachMotionListener() {
   state.sensorReady = true;
 }
 
-async function requestPermission() {
+export async function requestPermission() {
   if (typeof DeviceMotionEvent !== 'undefined' &&
       typeof DeviceMotionEvent.requestPermission === 'function') {
     try {
@@ -118,7 +120,7 @@ async function requestPermission() {
   }
 }
 
-function initSensors() {
+export function initSensors() {
   if (typeof DeviceMotionEvent === 'undefined') {
     $('status-msg').textContent = 'No motion sensors on this device.';
     $('sensor-hint').classList.remove('hidden');
@@ -148,7 +150,7 @@ function initSensors() {
 }
 
 // ─── Recording ─────────────────────────────────
-function startRecording() {
+export function startRecording() {
   if (!state.selectedTrick) { showToast('Select a trick first!'); return; }
   if (!state.sensorReady)   { showToast('Enable sensors first!'); return; }
   state.isRecording = true;
@@ -163,7 +165,7 @@ function startRecording() {
   state.timerInterval = setInterval(updateTimer, 100);
 }
 
-function stopRecording() {
+export function stopRecording() {
   state.isRecording = false;
   clearInterval(state.timerInterval);
   const durationMs = Date.now() - state.recordingStart;
@@ -193,7 +195,7 @@ function stopRecording() {
   openReview(state.pendingRecording);
 }
 
-function updateTimer() {
+export function updateTimer() {
   const e = Date.now() - state.recordingStart;
   const t = Math.floor((e % 1000) / 100);
   const s = Math.floor(e / 1000) % 60;
@@ -202,123 +204,20 @@ function updateTimer() {
 }
 
 // ─── 3D Animation ──────────────────────────────
-const anim = { orientations:[], samples:[], playing:false, currentTime:0,
+export const anim = { orientations:[], samples:[], playing:false, currentTime:0,
                 totalTime:0, speed:0.5, rafId:null, lastFrame:null };
 
-function qMul(a,b) {
-  return [a[0]*b[0]-a[1]*b[1]-a[2]*b[2]-a[3]*b[3],
-          a[0]*b[1]+a[1]*b[0]+a[2]*b[3]-a[3]*b[2],
-          a[0]*b[2]-a[1]*b[3]+a[2]*b[0]+a[3]*b[1],
-          a[0]*b[3]+a[1]*b[2]-a[2]*b[1]+a[3]*b[0]];
-}
-function qNorm(q) {
-  const l = Math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]);
-  return l < 1e-10 ? [1,0,0,0] : [q[0]/l,q[1]/l,q[2]/l,q[3]/l];
-}
-function qToMatrix(q) {
-  const [w,x,y,z] = q;
-  return [1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w),
-            2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w),
-            2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)];
-}
-
-function computeOrientations(samples) {
-  const out = [[1,0,0,0]];
-  for (let i = 1; i < samples.length; i++) {
-    const dt = (samples[i].t - samples[i-1].t) / 1000;
-    const {gx,gy,gz} = samples[i];
-    const angle = Math.sqrt(gx*gx+gy*gy+gz*gz) * dt;
-    let dq;
-    if (angle < 1e-8) { dq = [1,0,0,0]; }
-    else {
-      const ha = angle/2, sinHa = Math.sin(ha), omega = angle/dt;
-      dq = [Math.cos(ha), gx/omega*sinHa, gy/omega*sinHa, gz/omega*sinHa];
-    }
-    out.push(qNorm(qMul(out[i-1], dq)));
-  }
-  return out;
-}
-
-function project(p, m, cx, cy, scale, dist) {
-  const rx = m[0]*p[0]+m[1]*p[1]+m[2]*p[2];
-  const ry = m[3]*p[0]+m[4]*p[1]+m[5]*p[2];
-  const rz = m[6]*p[0]+m[7]*p[1]+m[8]*p[2];
-  const z  = dist + rz;
-  const f  = dist / Math.max(z, 0.1);
-  return [cx + rx*scale*f, cy - ry*scale*f, z];
-}
-
-function drawPhone(ctx, W, H, q) {
-  const m = qToMatrix(q);
-  const cx = W/2, cy = H/2, scale = Math.min(W,H)*0.28, dist = 4;
-  const [pw,ph,pd] = [0.5, 1.0, 0.08];
-  const [hw,hh,hd] = [pw/2, ph/2, pd/2];
-  const corners = [
-    [-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],
-    [-hw,-hh, hd],[hw,-hh, hd],[hw,hh, hd],[-hw,hh, hd],
-  ];
-  const proj = corners.map(p => project(p, m, cx, cy, scale, dist));
-  const faces = [
-    {idx:[0,1,2,3], color:'#1a1a1a', screen:false},
-    {idx:[4,5,6,7], color:'#2a2a2a', screen:true},
-    {idx:[0,1,5,4], color:'#222',    screen:false},
-    {idx:[2,3,7,6], color:'#222',    screen:false},
-    {idx:[0,3,7,4], color:'#252525', screen:false},
-    {idx:[1,2,6,5], color:'#252525', screen:false},
-  ].map(f => {
-    const ps = f.idx.map(i => proj[i]);
-    const avgZ = ps.reduce((s,p) => s+p[2], 0) / ps.length;
-    const cross = (ps[1][0]-ps[0][0])*(ps[3][1]-ps[0][1]) -
-                  (ps[1][1]-ps[0][1])*(ps[3][0]-ps[0][0]);
-    return {...f, ps, avgZ, cross};
-  }).sort((a,b) => a.avgZ - b.avgZ);
-
-  for (const f of faces) {
-    ctx.beginPath();
-    ctx.moveTo(f.ps[0][0], f.ps[0][1]);
-    for (let i = 1; i < f.ps.length; i++) ctx.lineTo(f.ps[i][0], f.ps[i][1]);
-    ctx.closePath();
-    ctx.fillStyle = f.color; ctx.fill();
-    ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.stroke();
-    if (f.screen && f.cross < 0) {
-      const inset = 0.07;
-      const sc = [[-hw+inset*pw,-hh+inset*ph,hd+.001],[hw-inset*pw,-hh+inset*ph,hd+.001],
-                  [hw-inset*pw, hh-inset*ph,hd+.001],[-hw+inset*pw, hh-inset*ph,hd+.001]];
-      const sp = sc.map(p => project(p, m, cx, cy, scale, dist));
-      ctx.beginPath(); ctx.moveTo(sp[0][0],sp[0][1]);
-      for (let i=1;i<sp.length;i++) ctx.lineTo(sp[i][0],sp[i][1]);
-      ctx.closePath(); ctx.fillStyle='#003344'; ctx.fill();
-      const ny = -hh+inset*ph*1.5;
-      const np = [[-0.04,ny,hd+.002],[0.04,ny,hd+.002]].map(p => project(p,m,cx,cy,scale,dist));
-      ctx.beginPath();
-      ctx.arc((np[0][0]+np[1][0])/2,(np[0][1]+np[1][1])/2, 3, 0, Math.PI*2);
-      ctx.fillStyle='#001a22'; ctx.fill();
-    }
-  }
-}
-
-function getQAtTime(samples, orientations, time) {
-  let idx = 0;
-  for (let i=0; i<samples.length-1; i++) { if (samples[i+1].t >= time) { idx=i; break; } idx=i; }
-  const t0=samples[idx].t, t1=idx+1<samples.length?samples[idx+1].t:t0;
-  const frac = t1>t0 ? (time-t0)/(t1-t0) : 0;
-  const q0=orientations[idx], q1=idx+1<orientations.length?orientations[idx+1]:q0;
-  const sign = q0[0]*q1[0]+q0[1]*q1[1]+q0[2]*q1[2]+q0[3]*q1[3] < 0 ? -1 : 1;
-  return qNorm([q0[0]+(sign*q1[0]-q0[0])*frac, q0[1]+(sign*q1[1]-q0[1])*frac,
-                q0[2]+(sign*q1[2]-q0[2])*frac, q0[3]+(sign*q1[3]-q0[3])*frac]);
-}
-
-function renderAnimFrame() {
+export function renderAnimFrame() {
   const canvas = $('anim-canvas');
   const ctx = canvas.getContext('2d');
   const W = canvas.clientWidth, H = canvas.clientHeight;
   canvas.width = W; canvas.height = H;
   ctx.clearRect(0, 0, W, H);
   if (anim.orientations.length < 2) return;
-  drawPhone(ctx, W, H, getQAtTime(anim.samples, anim.orientations, anim.currentTime));
+  drawPhone3D(ctx, W, H, getQAtTime(anim.samples, anim.orientations, anim.currentTime));
 }
 
-function animLoop() {
+export function animLoop() {
   if (!anim.playing) return;
   const now = performance.now(), dt = now - anim.lastFrame;
   anim.lastFrame = now;
@@ -334,18 +233,18 @@ function animLoop() {
   anim.rafId = requestAnimationFrame(animLoop);
 }
 
-function startAnim() {
+export function startAnim() {
   if (anim.currentTime >= anim.totalTime) anim.currentTime = 0;
   anim.playing = true; anim.lastFrame = performance.now();
   $('anim-play').textContent = '⏸'; animLoop();
 }
 
-function stopAnim() {
+export function stopAnim() {
   anim.playing = false; $('anim-play').textContent = '▶';
   if (anim.rafId) { cancelAnimationFrame(anim.rafId); anim.rafId = null; }
 }
 
-function initAnim(samples) {
+export function initAnim(samples) {
   anim.samples = samples;
   anim.orientations = computeOrientations(samples);
   anim.totalTime = samples.length > 0 ? samples[samples.length-1].t : 0;
@@ -365,7 +264,7 @@ function initAnim(samples) {
 }
 
 // ─── References ────────────────────────────────
-async function loadReferences() {
+export async function loadReferences() {
   try {
     const r = await fetch('/lab/api/references', {
       headers: { Authorization: 'Bearer ' + getToken() },
@@ -374,10 +273,10 @@ async function loadReferences() {
   } catch (_) {}
 }
 
-const refAnim = { orientations:[], samples:[], totalTime:0, currentTime:0,
+export const refAnim = { orientations:[], samples:[], totalTime:0, currentTime:0,
                   rafId:null, lastFrame:null, active:false };
 
-function showRefAnimation(trick) {
+export function showRefAnimation(trick) {
   stopRefAnimation();
   const card = $('ref-card');
   const ref = references[trick];
@@ -396,12 +295,12 @@ function showRefAnimation(trick) {
   refAnimLoop();
 }
 
-function stopRefAnimation() {
+export function stopRefAnimation() {
   refAnim.active = false;
   if (refAnim.rafId) { cancelAnimationFrame(refAnim.rafId); refAnim.rafId = null; }
 }
 
-function refAnimLoop() {
+export function refAnimLoop() {
   if (!refAnim.active) return;
   const now = performance.now(), dt = now - refAnim.lastFrame;
   refAnim.lastFrame = now;
@@ -413,13 +312,13 @@ function refAnimLoop() {
   canvas.width = W; canvas.height = H;
   ctx.clearRect(0, 0, W, H);
   if (refAnim.orientations.length >= 2) {
-    drawPhone(ctx, W, H, getQAtTime(refAnim.samples, refAnim.orientations, refAnim.currentTime));
+    drawPhone3D(ctx, W, H, getQAtTime(refAnim.samples, refAnim.orientations, refAnim.currentTime));
   }
   refAnim.rafId = requestAnimationFrame(refAnimLoop);
 }
 
 // ─── Review sheet ──────────────────────────────
-function openReview(rec) {
+export function openReview(rec) {
   $('review-trick').textContent = rec.trick;
   $('review-meta').textContent =
     `${(rec.durationMs/1000).toFixed(2)}s · ${rec.sampleCount} samples · ${rec.sampleRateHz} Hz`;
@@ -428,7 +327,7 @@ function openReview(rec) {
   requestAnimationFrame(() => initAnim(rec.samples));
 }
 
-function closeReview() {
+export function closeReview() {
   stopAnim();
   $('review-overlay').classList.add('hidden');
   document.body.style.overflow = '';
@@ -437,7 +336,7 @@ function closeReview() {
 }
 
 // ─── Save ──────────────────────────────────────
-async function saveRecording() {
+export async function saveRecording() {
   const rec = state.pendingRecording;
   if (!rec) { closeReview(); return; }
   const btn = $('btn-save');
@@ -462,8 +361,8 @@ async function saveRecording() {
 }
 
 // ─── Toast ─────────────────────────────────────
-let toastTimer = null;
-function showToast(msg) {
+export let toastTimer = null;
+export function showToast(msg) {
   const t = $('toast');
   t.textContent = msg; t.classList.add('show');
   clearTimeout(toastTimer);
@@ -471,7 +370,7 @@ function showToast(msg) {
 }
 
 // ─── Init ──────────────────────────────────────
-async function init() {
+export async function init() {
   await loadTricks();
   await loadReferences();
   state.selectedTrick = TRICKS[0];

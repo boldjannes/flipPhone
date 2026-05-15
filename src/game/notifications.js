@@ -13,18 +13,18 @@
  * VAPID keys + pywebpush on the Flask side. See bottom of file for outline.
  */
 
-const NOTIFICATION_PERM_KEY = "fp_notification_perm";
+export const NOTIFICATION_PERM_KEY = "fp_notification_perm";
 
 // ──────────────────────────────────────────────
 // Permission
 // ──────────────────────────────────────────────
 
-function getNotificationPermission() {
+export function getNotificationPermission() {
   if (!("Notification" in window)) return "unsupported";
   return Notification.permission; // "default" | "granted" | "denied"
 }
 
-async function requestNotificationPermission() {
+export async function requestNotificationPermission() {
   if (!("Notification" in window)) return "unsupported";
 
   if (Notification.permission === "granted") {
@@ -42,7 +42,7 @@ async function requestNotificationPermission() {
   return result;
 }
 
-function canNotify() {
+export function canNotify() {
   return (
     "Notification" in window &&
     Notification.permission === "granted" &&
@@ -54,7 +54,7 @@ function canNotify() {
 // Notification helpers
 // ──────────────────────────────────────────────
 
-function _notify(title, body, tag, onClick) {
+export function _notify(title, body, tag, onClick) {
   if (!canNotify()) return null;
 
   const n = new Notification(title, {
@@ -80,7 +80,7 @@ function _notify(title, body, tag, onClick) {
 // Public notification functions
 // ──────────────────────────────────────────────
 
-function notifyNewChallenge(fromUsername, gameId) {
+export function notifyNewChallenge(fromUsername, gameId) {
   _notify(
     "Neue Herausforderung!",
     `@${fromUsername} hat dich herausgefordert!`,
@@ -91,7 +91,7 @@ function notifyNewChallenge(fromUsername, gameId) {
   );
 }
 
-function notifyYourTurn(gameId, opponentUsername) {
+export function notifyYourTurn(gameId, opponentUsername) {
   _notify(
     "Du bist dran!",
     `@${opponentUsername} ist fertig \u2013 dein Zug!`,
@@ -102,7 +102,7 @@ function notifyYourTurn(gameId, opponentUsername) {
   );
 }
 
-function notifyGameOver(won, opponentUsername, gameId) {
+export function notifyGameOver(won, opponentUsername, gameId) {
   const title = won ? "Gewonnen!" : "Verloren";
   const body = won
     ? `Du hast gegen @${opponentUsername} gewonnen!`
@@ -125,7 +125,7 @@ function notifyGameOver(won, opponentUsername, gameId) {
  *   // inside poller onUpdate:
  *   notifier.process(data);
  */
-class PollNotifier {
+export class PollNotifier {
   constructor(myUserId) {
     this.myUserId = myUserId;
     this._prevMyTurnCount = -1;    // -1 = first poll, don't notify

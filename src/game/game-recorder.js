@@ -1,5 +1,8 @@
 "use strict";
 
+import { getToken } from "./auth.js";
+import { SensorKit } from "../shared/sensor.js";
+
 /**
  * GameRecorder — sensor recording + trick prediction for Game of Skate.
  *
@@ -46,7 +49,7 @@ var normalizeTrick = function(raw) {
   return _trickNameToId[raw] || raw;
 };
 
-class GameRecorder {
+export class GameRecorder {
   constructor(options = {}) {
     this.confidenceThreshold = options.confidenceThreshold ?? 0.8;
     this.cooldownMs = options.cooldownMs ?? 2000;

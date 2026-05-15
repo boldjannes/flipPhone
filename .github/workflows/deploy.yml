@@ -8,16 +8,41 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/flipPhone
-            git pull origin main
-            chmod +x backup_db.sh
-            source venv/bin/activate
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Build JS bundles
+        run: |
+          npm ci
+          npm run build
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Backup DB + pull + install
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "
+            cd /opt/flipPhone &&
+            ./backup_db.sh &&
+            git pull origin main &&
+            source venv/bin/activate &&
             pip install -r requirements.txt --quiet
-            sudo systemctl restart flipphone
+          "
+
+      - name: Sync dist/
+        run: |
+          rsync -az --delete \
+            static/dist/ \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/flipPhone/static/dist/
+
+      - name: Restart service
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "systemctl restart flipphone"

@@ -1,19 +1,21 @@
 "use strict";
 
-const FRIENDS_API = "/game/api";
-const SENT_REQS_KEY = "fp_sent_requests"; // localStorage: Set<userId> of pending sent requests
+import { getToken } from "./auth.js";
+
+export const FRIENDS_API = "/game/api";
+export const SENT_REQS_KEY = "fp_sent_requests"; // localStorage: Set<userId> of pending sent requests
 
 // ──────────────────────────────────────────────
 // API helpers
 // ──────────────────────────────────────────────
-function _headers() {
+export function _headers() {
   const h = { "Content-Type": "application/json" };
   const token = getToken();
   if (token) h["Authorization"] = `Bearer ${token}`;
   return h;
 }
 
-async function searchUsers(query) {
+export async function searchUsers(query) {
   const resp = await fetch(
     `${FRIENDS_API}/users/search?q=${encodeURIComponent(query)}`,
     { headers: _headers() }
@@ -22,25 +24,25 @@ async function searchUsers(query) {
   return resp.json();
 }
 
-async function getFriends() {
+export async function getFriends() {
   const resp = await fetch(`${FRIENDS_API}/friends`, { headers: _headers() });
   if (!resp.ok) return [];
   return resp.json();
 }
 
-async function getRequests() {
+export async function getRequests() {
   const resp = await fetch(`${FRIENDS_API}/friends/requests`, { headers: _headers() });
   if (!resp.ok) return [];
   return resp.json();
 }
 
-async function getSentRequests() {
+export async function getSentRequests() {
   const resp = await fetch(`${FRIENDS_API}/friends/sent`, { headers: _headers() });
   if (!resp.ok) return [];
   return resp.json();
 }
 
-async function sendRequest(userId) {
+export async function sendRequest(userId) {
   const resp = await fetch(`${FRIENDS_API}/friends/request`, {
     method: "POST",
     headers: _headers(),
@@ -49,7 +51,7 @@ async function sendRequest(userId) {
   return resp;
 }
 
-async function acceptRequest(friendshipId) {
+export async function acceptRequest(friendshipId) {
   const resp = await fetch(`${FRIENDS_API}/friends/accept`, {
     method: "POST",
     headers: _headers(),
@@ -58,7 +60,7 @@ async function acceptRequest(friendshipId) {
   return resp.json();
 }
 
-async function declineRequest(friendshipId) {
+export async function declineRequest(friendshipId) {
   const resp = await fetch(`${FRIENDS_API}/friends/decline`, {
     method: "POST",
     headers: _headers(),
@@ -67,7 +69,7 @@ async function declineRequest(friendshipId) {
   return resp.json();
 }
 
-async function removeFriend(friendshipId) {
+export async function removeFriend(friendshipId) {
   const resp = await fetch(`${FRIENDS_API}/friends/${friendshipId}`, {
     method: "DELETE",
     headers: _headers(),
@@ -78,39 +80,39 @@ async function removeFriend(friendshipId) {
 // ──────────────────────────────────────────────
 // Persistent sent-request tracking
 // ──────────────────────────────────────────────
-function _loadSentSet() {
+export function _loadSentSet() {
   try { return new Set(JSON.parse(localStorage.getItem(SENT_REQS_KEY)) || []); }
   catch { return new Set(); }
 }
-function _saveSentSet(s) {
+export function _saveSentSet(s) {
   localStorage.setItem(SENT_REQS_KEY, JSON.stringify([...s]));
 }
-function _markSent(userId) {
+export function _markSent(userId) {
   const s = _loadSentSet(); s.add(String(userId)); _saveSentSet(s);
 }
-function _unmarkSent(userId) {
+export function _unmarkSent(userId) {
   const s = _loadSentSet(); s.delete(String(userId)); _saveSentSet(s);
 }
-function _isSent(userId) {
+export function _isSent(userId) {
   return _loadSentSet().has(String(userId));
 }
 
 // ──────────────────────────────────────────────
 // UI helpers
 // ──────────────────────────────────────────────
-function _initials(user) {
+export function _initials(user) {
   const name = user.display_name || user.username;
   return name.slice(0, 2).toUpperCase();
 }
 
-function _statsLine(user) {
+export function _statsLine(user) {
   const parts = [];
   if (user.tricks_landed) parts.push(`${user.tricks_landed} tricks`);
   if (user.games_won) parts.push(`${user.games_won} W`);
   return parts.length ? parts.join(" · ") : "New player";
 }
 
-function _el(tag, cls, text) {
+export function _el(tag, cls, text) {
   const el = document.createElement(tag);
   if (cls) el.className = cls;
   if (text !== undefined) el.textContent = text;
@@ -120,9 +122,9 @@ function _el(tag, cls, text) {
 // ──────────────────────────────────────────────
 // Search
 // ──────────────────────────────────────────────
-let searchTimer = null;
+export let searchTimer = null;
 
-function setupSearch() {
+export function setupSearch() {
   const input = document.getElementById("friend-search-input");
   const list = document.getElementById("search-results");
   if (!input || !list) return;
@@ -139,7 +141,7 @@ function setupSearch() {
   });
 }
 
-function renderSearchResults(users, container) {
+export function renderSearchResults(users, container) {
   container.innerHTML = "";
   if (!users.length) {
     container.appendChild(_el("div", "friends-empty", "Keine Nutzer gefunden"));
@@ -187,12 +189,12 @@ function renderSearchResults(users, container) {
 // ──────────────────────────────────────────────
 // Incoming requests
 // ──────────────────────────────────────────────
-async function loadRequests() {
+export async function loadRequests() {
   const reqs = await getRequests();
   _renderRequests(reqs);
 }
 
-function _renderRequests(reqs) {
+export function _renderRequests(reqs) {
   const badge = document.getElementById("requests-badge");
   const list  = document.getElementById("requests-list");
   const banner = document.getElementById("requests-banner");
@@ -261,7 +263,7 @@ function _renderRequests(reqs) {
 // ──────────────────────────────────────────────
 // Sent requests
 // ──────────────────────────────────────────────
-async function loadSentRequests() {
+export async function loadSentRequests() {
   const sent = await getSentRequests();
   const list = document.getElementById("sent-requests-list");
   const section = document.getElementById("sent-requests-section");
@@ -298,7 +300,7 @@ async function loadSentRequests() {
 // ──────────────────────────────────────────────
 // Friends list
 // ──────────────────────────────────────────────
-async function loadFriends() {
+export async function loadFriends() {
   const friends = await getFriends();
   const list = document.getElementById("friends-list");
   if (!list) return;
@@ -344,7 +346,7 @@ async function loadFriends() {
 // ──────────────────────────────────────────────
 // Challenge a friend
 // ──────────────────────────────────────────────
-async function startChallenge(userId, displayName) {
+export async function startChallenge(userId, displayName) {
   try {
     const resp = await fetch("/game/api/games/challenge", {
       method: "POST",
@@ -368,9 +370,9 @@ async function startChallenge(userId, displayName) {
 // ──────────────────────────────────────────────
 // Polling & init
 // ──────────────────────────────────────────────
-let requestsPollTimer = null;
+export let requestsPollTimer = null;
 
-function initFriends() {
+export function initFriends() {
   setupSearch();
   loadRequests();
   loadSentRequests();
@@ -386,6 +388,6 @@ function initFriends() {
   requestsPollTimer = setInterval(() => { loadRequests(); loadSentRequests(); }, 30000);
 }
 
-function destroyFriends() {
+export function destroyFriends() {
   if (requestsPollTimer) { clearInterval(requestsPollTimer); requestsPollTimer = null; }
 }

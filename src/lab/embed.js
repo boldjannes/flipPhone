@@ -1,5 +1,11 @@
 "use strict";
 
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+// ─── Constants ────────────────────────────────
+const CONFIG_KEY = "flipphone_config";
+
 const PALETTE = [
   0x00e5ff, 0xff6b6b, 0x51cf66, 0xffd43b,
   0xcc5de8, 0xff922b, 0x74c0fc, 0xf783ac,
@@ -8,32 +14,43 @@ const PALETTE = [
 const COLOR_SELECTED = 0xffffff;
 
 // ─── State ────────────────────────────────────
-let recordings = [];
-let visibleRecordings = [];
+let recordings = [];       // all recordings [{id, trick, collector, duration_ms, sample_count, x, y, z}]
+let visibleRecordings = []; // subset currently in the point cloud (after filter)
 let selected = new Set();
-let trickColorIdx = {};
+let trickColorIdx = {};    // trick → palette index
 let hiddenTricks = new Set();
 let hiddenCollectors = new Set();
 
 let threeScene, threeCamera, threeRenderer, threeControls, threePoints;
 let posArr, colorArr;
 
-// ─── Auth ─────────────────────────────────────
-function getToken() {
-  return localStorage.getItem("fp_game_token") || "";
+// ─── Config / Auth ────────────────────────────
+function getConfig() {
+  try { return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}; } catch { return {}; }
 }
 
-function redirectToLogin() {
-  window.location.replace("/admin/");
+function setConfig(patch) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...getConfig(), ...patch }));
 }
+
+function getApiKey() { return getConfig().apiKey || ""; }
 
 async function apiFetch(path, opts = {}) {
-  const t = getToken();
-  if (!t) { redirectToLogin(); throw new Error("No token"); }
-  const headers = { "Authorization": "Bearer " + t, ...(opts.headers || {}) };
+  const headers = { "X-API-Key": getApiKey(), ...(opts.headers || {}) };
   const resp = await fetch(path, { ...opts, headers });
-  if (resp.status === 401 || resp.status === 403) { redirectToLogin(); throw new Error("Unauthorized"); }
+  if (resp.status === 401 || resp.status === 403) { showAuthModal(); throw new Error("Unauthorized"); }
   return resp;
+}
+
+function showAuthModal() {
+  document.getElementById("auth-modal").classList.remove("hidden");
+  const inp = document.getElementById("auth-key-input");
+  inp.value = getApiKey();
+  inp.focus();
+}
+
+function hideAuthModal() {
+  document.getElementById("auth-modal").classList.add("hidden");
 }
 
 // ─── Load ─────────────────────────────────────
@@ -44,7 +61,7 @@ async function loadData() {
   updateInfoPanel();
 
   let resp;
-  try { resp = await apiFetch("/admin/api/embeddings"); }
+  try { resp = await apiFetch("/lab/api/embeddings"); }
   catch { return; }
 
   if (!resp.ok) { setStatus("Failed to load data."); return; }
@@ -57,6 +74,7 @@ async function loadData() {
     return;
   }
 
+  // Assign palette colors per trick
   const tricks = [...new Set(data.map(d => d.trick))].sort();
   trickColorIdx = {};
   tricks.forEach((t, i) => { trickColorIdx[t] = i % PALETTE.length; });
@@ -99,7 +117,7 @@ function buildScene() {
   threeCamera = new THREE.PerspectiveCamera(60, wrapper.clientWidth / wrapper.clientHeight, 0.01, 1000);
   threeCamera.position.set(0, 0, 8);
 
-  threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
+  threeControls = new OrbitControls(threeCamera, threeRenderer.domElement);
   threeControls.enableDamping = true;
   threeControls.dampingFactor = 0.08;
 
@@ -359,19 +377,32 @@ document.getElementById("filter-toggle").addEventListener("click", () => {
   btn.textContent = open ? "⚙ Filter" : "✕ Filter";
 });
 
+// ─── Auth wiring ──────────────────────────────
+document.getElementById("auth-submit").addEventListener("click", async () => {
+  const key = document.getElementById("auth-key-input").value.trim();
+  if (!key) return;
+  setConfig({ apiKey: key });
+  hideAuthModal();
+  await init();
+});
+
+document.getElementById("auth-key-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("auth-submit").click();
+});
+
 document.getElementById("btn-delete").addEventListener("click", deleteSelected);
 
 // ─── Init ─────────────────────────────────────
 async function init() {
-  const t = getToken();
-  if (!t) { redirectToLogin(); return; }
+  const key = getApiKey();
+  if (!key) { showAuthModal(); return; }
 
-  const resp = await fetch("/game/api/auth/me", { headers: { "Authorization": "Bearer " + t } });
-  if (!resp.ok) { redirectToLogin(); return; }
+  const resp = await fetch("/lab/api/me", { headers: { "X-API-Key": key } });
+  if (!resp.ok) { showAuthModal(); return; }
 
   const me = await resp.json();
   const statusEl = document.getElementById("auth-status");
-  statusEl.textContent = "● " + (me.username || "admin");
+  statusEl.textContent = `● ${me.name}`;
   statusEl.classList.add("connected");
 
   await loadData();
