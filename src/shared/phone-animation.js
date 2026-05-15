@@ -145,21 +145,27 @@ function _buildRenderer(canvas) {
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));
   const key = new THREE.DirectionalLight(0xffffff, 1.8);
   key.position.set(2, 4, 3);
-  key.castShadow = true;
-  key.shadow.mapSize.width  = 512;
-  key.shadow.mapSize.height = 512;
-  key.shadow.camera.near   = 0.5;
-  key.shadow.camera.far    = 15;
-  key.shadow.camera.left   = -2.5;
-  key.shadow.camera.right  =  2.5;
-  key.shadow.camera.top    =  2.5;
-  key.shadow.camera.bottom = -2.5;
-  key.shadow.radius = 4;
-  key.shadow.bias   = -0.002;
   scene.add(key);
   const fill = new THREE.DirectionalLight(0xffffff, 0.5);
   fill.position.set(-3, -1, -2);
   scene.add(fill);
+
+  // Invisible light purely for shadow projection onto the screen plane.
+  // Positioned near the camera so the shadow falls roughly behind the board.
+  const shadowLight = new THREE.DirectionalLight(0xffffff, 0);
+  shadowLight.position.set(0.5, 2, 5);
+  shadowLight.castShadow = true;
+  shadowLight.shadow.mapSize.width  = 512;
+  shadowLight.shadow.mapSize.height = 512;
+  shadowLight.shadow.camera.near   = 0.5;
+  shadowLight.shadow.camera.far    = 15;
+  shadowLight.shadow.camera.left   = -3;
+  shadowLight.shadow.camera.right  =  3;
+  shadowLight.shadow.camera.top    =  3;
+  shadowLight.shadow.camera.bottom = -3;
+  shadowLight.shadow.radius = 3;
+  shadowLight.shadow.bias   = -0.001;
+  scene.add(shadowLight);
 
   return { renderer, scene, camera };
 }
@@ -231,51 +237,30 @@ export async function createPhoneScene(canvas) {
 export const _canvasAnims = new Map();
 
 // Shadow constants
-const SHADOW_SCALE_MIN   = 0.40;
-const SHADOW_OPACITY_MAX = 0.36;
+const SHADOW_OPACITY_MAX = 0.45;
 const SHADOW_OPACITY_MIN = 0.05;
 const MODEL_RISE         = 1.2;  // world units the board moves toward camera at h=1
 
-// Key light position — must match _buildRenderer
-const _LIGHT = { x: 2, y: 4, z: 3 };
-
 function _buildShadow(scene, pivot) {
-  const box = new THREE.Box3().setFromObject(pivot);
-  const floorY = box.min.y - 0.05;
+  // Position the shadow plane just behind the board (negative Z = away from camera).
+  pivot.updateMatrixWorld(true);
+  const box  = new THREE.Box3().setFromObject(pivot);
+  const backZ = box.min.z - 0.1;
 
-  // Precompute ray parameter t: light ray through board center (board.y ≈ 0)
-  // onto ground plane y=floorY. Board never moves in Y so t is constant.
-  // P = L + t*(B-L), solve P.y = floorY → t = (L.y - floorY) / L.y
-  const t = (_LIGHT.y - floorY) / _LIGHT.y;
-
-  const geo = new THREE.PlaneGeometry(1.2, 0.50);
-  const mat = new THREE.MeshBasicMaterial({
-    color: 0x000000,
-    transparent: true,
-    opacity: SHADOW_OPACITY_MAX,
-    depthWrite: false,
-  });
+  // PlaneGeometry by default faces +Z (toward camera/shadow light) — no rotation needed.
+  const geo  = new THREE.PlaneGeometry(6, 6);
+  const mat  = new THREE.ShadowMaterial({ opacity: SHADOW_OPACITY_MAX, depthWrite: false });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.renderOrder = -1;
+  mesh.position.set(0, 0, backZ);
+  mesh.receiveShadow = true;
+  mesh.renderOrder   = -1;
   scene.add(mesh);
-  return { mesh, floorY, t };
+  return { mesh };
 }
 
 function _updateShadow(shadowObj, pivot, h) {
-  // Board moves toward camera (Z axis) — phone lies flat, "up" = out of screen
-  const boardZ = h * MODEL_RISE;
-  pivot.position.z = boardZ;
-
-  // Project light ray through board center onto ground plane.
-  // Shadow X is constant (board doesn't move in X).
-  // Shadow Z shifts as boardZ increases — light is angled, not straight overhead.
-  const { t } = shadowObj;
-  shadowObj.mesh.position.x = _LIGHT.x * (1 - t);
-  shadowObj.mesh.position.z = _LIGHT.z + t * (boardZ - _LIGHT.z);
-
-  const s = 1 - h * (1 - SHADOW_SCALE_MIN);
-  shadowObj.mesh.scale.set(s, s, 1);
+  pivot.position.z = h * MODEL_RISE;
+  // Silhouette shape is handled by the shadow map; just fade opacity as board rises.
   shadowObj.mesh.material.opacity =
     SHADOW_OPACITY_MAX - h * (SHADOW_OPACITY_MAX - SHADOW_OPACITY_MIN);
 }
