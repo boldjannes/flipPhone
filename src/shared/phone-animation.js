@@ -256,7 +256,7 @@ export async function startCanvasAnim(canvas, samples) {
   const gltf = await _loadModel();
   const { renderer, scene, camera } = _buildRenderer(canvas);
   const model = _cloneModel(gltf, scene);
-  const shadow = _buildShadow(scene);
+  const shadow = _buildShadow(scene, model);
 
   const orientations  = computeOrientations(samples);
   const heightFactors = computeHeightFactors(samples);
@@ -277,7 +277,7 @@ export async function startCanvasAnim(canvas, samples) {
     }
     st.lastFrame = now;
     _applyQ(st.model, getQAtTime(st.samples, st.orientations, st.currentTime));
-    _updateShadow(st.shadow, getHeightAtTime(st.samples, st.heightFactors, st.currentTime));
+    _updateShadow(st.shadow, st.model, getHeightAtTime(st.samples, st.heightFactors, st.currentTime));
     st.renderer.render(st.scene, st.camera);
     st.rafId = requestAnimationFrame(frame);
   }
