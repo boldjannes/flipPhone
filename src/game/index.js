@@ -2,7 +2,7 @@
 
 import { getCachedUser, logout } from "./auth.js";
 import { initFriends, destroyFriends } from "./friends.js";
-import { loadHomeTab, updateHome } from "./home.js";
+import { loadHomeTab, updateHome, loadGamesTab } from "./home.js";
 import { openGame } from "./game-screen.js";
 import { GamePoller } from "./poller.js";
 
@@ -27,6 +27,7 @@ function switchNav(tab) {
   const panel = document.getElementById("tab-" + tab);
   if (panel) panel.classList.add("active");
   if (tab === "home") loadHomeTab();
+  if (tab === "games") loadGamesTab();
   if (tab === "friends") initFriends();
 }
 window.switchNav = switchNav;

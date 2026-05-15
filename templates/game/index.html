@@ -501,6 +501,52 @@
         white-space: nowrap;
       }
 
+      /* ── Games History Tab ── */
+      .history-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .history-card:last-child { border-bottom: none; }
+      .history-result {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 800;
+        flex-shrink: 0;
+        border: 2px solid var(--text);
+      }
+      .history-result.win  { background: var(--text); color: var(--bg); }
+      .history-result.loss { background: var(--bg);   color: var(--text); }
+      .history-info { flex: 1; min-width: 0; }
+      .history-opponent { font-size: 15px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .history-letters {
+        display: flex;
+        gap: 3px;
+        margin-top: 4px;
+        align-items: center;
+      }
+      .history-letter-group { display: flex; gap: 2px; align-items: center; }
+      .history-letter-sep { font-size: 10px; color: var(--dim); margin: 0 3px; }
+      .history-ch {
+        font-size: 10px;
+        font-weight: 700;
+        width: 14px;
+        height: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        color: var(--dim);
+      }
+      .history-ch.lit { border-color: var(--danger); color: var(--danger); }
+      .history-date { font-size: 11px; color: var(--dim); white-space: nowrap; flex-shrink: 0; }
+
       /* ── Game Screen Overlay ── */
       #game-screen {
         position: fixed;
@@ -1094,9 +1140,7 @@
 
       <!-- Games Tab -->
       <div id="tab-games" class="app-tab-content">
-        <div id="games-content" style="padding:20px;color:var(--dim);text-align:center;padding-top:60px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;">
-          Spiele-Liste kommt hier hin
-        </div>
+        <div id="games-content"></div>
       </div>
 
       <!-- Friends Tab -->
@@ -1139,11 +1183,11 @@
         <button class="nav-btn active" data-nav="home">
           <span class="nav-icon">&#9750;</span>
           Home
+          <span id="games-badge" class="nav-badge hidden"></span>
         </button>
         <button class="nav-btn" data-nav="games">
           <span class="nav-icon">&#9889;</span>
           Spiele
-          <span id="games-badge" class="nav-badge hidden"></span>
         </button>
         <button class="nav-btn" data-nav="friends">
           <span class="nav-icon">&#9734;</span>

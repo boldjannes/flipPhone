@@ -349,6 +349,84 @@ export function renderHome(data, friends) {
 }
 
 // ──────────────────────────────────────────────
+// Games history tab
+// ──────────────────────────────────────────────
+
+export function renderHistoryCard(game) {
+  const me = _myUserId();
+  const won = game.winner_id === me;
+  const opp = _opponent(game);
+  const myLetters   = _myLetters(game);
+  const oppLetters  = _opponentLetters(game);
+
+  const card = _h("div", "history-card");
+
+  const result = _h("div", `history-result ${won ? "win" : "loss"}`);
+  result.textContent = won ? "W" : "L";
+  card.appendChild(result);
+
+  const info = _h("div", "history-info");
+  info.appendChild(_h("div", "history-opponent", opp.display_name || opp.username));
+
+  const letters = _h("div", "history-letters");
+  const WORD = "SKATE";
+
+  const myGroup = _h("div", "history-letter-group");
+  for (let i = 0; i < WORD.length; i++) {
+    const ch = _h("span", "history-ch" + (i < myLetters.length ? " lit" : ""));
+    ch.textContent = WORD[i];
+    myGroup.appendChild(ch);
+  }
+  letters.appendChild(myGroup);
+
+  letters.appendChild(_h("span", "history-letter-sep", "vs"));
+
+  const oppGroup = _h("div", "history-letter-group");
+  for (let i = 0; i < WORD.length; i++) {
+    const ch = _h("span", "history-ch" + (i < oppLetters.length ? " lit" : ""));
+    ch.textContent = WORD[i];
+    oppGroup.appendChild(ch);
+  }
+  letters.appendChild(oppGroup);
+  info.appendChild(letters);
+  card.appendChild(info);
+
+  const date = _h("div", "history-date");
+  const d = new Date(game.updated_at);
+  date.textContent = d.toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+  card.appendChild(date);
+
+  return card;
+}
+
+export async function loadGamesTab() {
+  const container = document.getElementById("games-content");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const token = getToken();
+  const r = await fetch("/game/api/games/history", {
+    headers: { Authorization: `Bearer ${token}` },
+  }).catch(() => null);
+
+  if (!r || !r.ok) {
+    container.innerHTML = `<div style="padding:60px 20px;text-align:center;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;">Fehler beim Laden</div>`;
+    return;
+  }
+
+  const games = await r.json();
+  if (!games.length) {
+    container.innerHTML = `<div style="padding:60px 20px;text-align:center;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:0.1em;">Noch keine abgeschlossenen Spiele</div>`;
+    return;
+  }
+
+  const sec = _h("div", "home-section");
+  sec.appendChild(_h("div", "home-section-title", "Spielverlauf"));
+  games.forEach(g => sec.appendChild(renderHistoryCard(g)));
+  container.appendChild(sec);
+}
+
+// ──────────────────────────────────────────────
 // Public API
 // ──────────────────────────────────────────────
 

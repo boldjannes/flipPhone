@@ -623,6 +623,22 @@ def list_games():
     return jsonify([_game_state(r, db) for r in rows])
 
 
+@game.route('/game/api/games/history')
+@require_game_session
+def list_finished_games():
+    me = g.game_user['uid']
+    db = get_db()
+    rows = db.execute(
+        '''SELECT * FROM games
+           WHERE (challenger_id = ? OR opponent_id = ?)
+             AND status = 'finished'
+           ORDER BY updated_at DESC
+           LIMIT 50''',
+        (me, me),
+    ).fetchall()
+    return jsonify([_game_state(r, db) for r in rows])
+
+
 @game.route('/game/api/games/<int:game_id>')
 @require_game_session
 def get_game(game_id):
