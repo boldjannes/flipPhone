@@ -133,6 +133,8 @@ function _buildRenderer(canvas) {
   renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(W, H);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
 
@@ -143,6 +145,17 @@ function _buildRenderer(canvas) {
   scene.add(new THREE.AmbientLight(0xffffff, 1.2));
   const key = new THREE.DirectionalLight(0xffffff, 1.8);
   key.position.set(2, 4, 3);
+  key.castShadow = true;
+  key.shadow.mapSize.width  = 512;
+  key.shadow.mapSize.height = 512;
+  key.shadow.camera.near   = 0.5;
+  key.shadow.camera.far    = 15;
+  key.shadow.camera.left   = -2.5;
+  key.shadow.camera.right  =  2.5;
+  key.shadow.camera.top    =  2.5;
+  key.shadow.camera.bottom = -2.5;
+  key.shadow.radius = 4;
+  key.shadow.bias   = -0.002;
   scene.add(key);
   const fill = new THREE.DirectionalLight(0xffffff, 0.5);
   fill.position.set(-3, -1, -2);
@@ -177,6 +190,12 @@ function _cloneModel(gltf, scene) {
   transformed.add(centered);
 
   pivot.add(transformed);
+
+  // All meshes cast shadows
+  pivot.traverse(child => {
+    if (child.isMesh) child.castShadow = true;
+  });
+
   scene.add(pivot);
   return pivot;
 }
@@ -212,17 +231,22 @@ export async function createPhoneScene(canvas) {
 export const _canvasAnims = new Map();
 
 // Shadow constants
-const SHADOW_X_DRIFT    = 0.18;  // subtle leftward drift at peak (perspective hint)
-const SHADOW_SCALE_MIN  = 0.40;
+const SHADOW_SCALE_MIN   = 0.40;
 const SHADOW_OPACITY_MAX = 0.36;
 const SHADOW_OPACITY_MIN = 0.05;
-const MODEL_RISE        = 0.75;  // how far (world units) the board rises at h=1
+const MODEL_RISE         = 1.2;  // world units the board moves toward camera at h=1
+
+// Key light position — must match _buildRenderer
+const _LIGHT = { x: 2, y: 4, z: 3 };
 
 function _buildShadow(scene, pivot) {
-  // Measure the actual floor level from the model's neutral-pose bounding box.
-  // This accounts for MODEL_ROTATION so the shadow sits exactly below the board.
   const box = new THREE.Box3().setFromObject(pivot);
   const floorY = box.min.y - 0.05;
+
+  // Precompute ray parameter t: light ray through board center (board.y ≈ 0)
+  // onto ground plane y=floorY. Board never moves in Y so t is constant.
+  // P = L + t*(B-L), solve P.y = floorY → t = (L.y - floorY) / L.y
+  const t = (_LIGHT.y - floorY) / _LIGHT.y;
 
   const geo = new THREE.PlaneGeometry(1.2, 0.50);
   const mat = new THREE.MeshBasicMaterial({
@@ -233,17 +257,23 @@ function _buildShadow(scene, pivot) {
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set(0, floorY, 0);
   mesh.renderOrder = -1;
   scene.add(mesh);
-  return { mesh, floorY };
+  return { mesh, floorY, t };
 }
 
 function _updateShadow(shadowObj, pivot, h) {
-  // Board rises above the floor as height increases
-  pivot.position.y = h * MODEL_RISE;
-  // Shadow stays on the floor, shifts subtly left, shrinks and fades
-  shadowObj.mesh.position.x = -h * SHADOW_X_DRIFT;
+  // Board moves toward camera (Z axis) — phone lies flat, "up" = out of screen
+  const boardZ = h * MODEL_RISE;
+  pivot.position.z = boardZ;
+
+  // Project light ray through board center onto ground plane.
+  // Shadow X is constant (board doesn't move in X).
+  // Shadow Z shifts as boardZ increases — light is angled, not straight overhead.
+  const { t } = shadowObj;
+  shadowObj.mesh.position.x = _LIGHT.x * (1 - t);
+  shadowObj.mesh.position.z = _LIGHT.z + t * (boardZ - _LIGHT.z);
+
   const s = 1 - h * (1 - SHADOW_SCALE_MIN);
   shadowObj.mesh.scale.set(s, s, 1);
   shadowObj.mesh.material.opacity =
