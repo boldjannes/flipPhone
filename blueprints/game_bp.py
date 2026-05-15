@@ -195,6 +195,7 @@ def _game_state(row, db):
         'current_turn_id': row['current_turn_id'],
         'current_role': row['current_role'],
         'current_line': json.loads(row['current_line']) if row['current_line'] else None,
+        'current_line_samples': json.loads(row['current_line_samples']) if row['current_line_samples'] else None,
         'challenger_letters': row['challenger_letters'],
         'opponent_letters': row['opponent_letters'],
         'winner_id': row['winner_id'],
@@ -683,6 +684,7 @@ def decline_game(game_id):
 def set_line(game_id):
     data = request.get_json(silent=True) or {}
     tricks = data.get('tricks')
+    samples_per_trick = data.get('samples_per_trick')  # optional [[{t,ax,...}], ...]
     if not isinstance(tricks, list) or not (1 <= len(tricks) <= 3):
         return jsonify({'error': 'tricks must be a list of 1-3 items'}), 400
 
@@ -712,10 +714,12 @@ def set_line(game_id):
     other = _other_player(row, me)
 
     db.execute(
-        '''UPDATE games SET current_line = ?, current_role = 'matcher',
-                  current_turn_id = ?, updated_at = ?
+        '''UPDATE games SET current_line = ?, current_line_samples = ?,
+                  current_role = 'matcher', current_turn_id = ?, updated_at = ?
            WHERE id = ?''',
-        (json.dumps(tricks), other, now, game_id),
+        (json.dumps(tricks),
+         json.dumps(samples_per_trick) if isinstance(samples_per_trick, list) else None,
+         other, now, game_id),
     )
     db.execute(
         '''INSERT INTO game_turns (game_id, player_id, role, tricks_attempted, created_at)
@@ -811,8 +815,8 @@ def submit_attempt(game_id):
         db.execute(
             '''UPDATE games SET challenger_letters = ?, opponent_letters = ?,
                       status = 'finished', winner_id = ?,
-                      current_line = NULL, current_turn_id = NULL,
-                      updated_at = ?
+                      current_line = NULL, current_line_samples = NULL,
+                      current_turn_id = NULL, updated_at = ?
                WHERE id = ?''',
             (challenger_letters, opponent_letters, winner, now, game_id),
         )
@@ -824,7 +828,8 @@ def submit_attempt(game_id):
         db.execute(
             '''UPDATE games SET challenger_letters = ?, opponent_letters = ?,
                       current_role = 'setter', current_turn_id = ?,
-                      current_line = NULL, updated_at = ?
+                      current_line = NULL, current_line_samples = NULL,
+                      updated_at = ?
                WHERE id = ?''',
             (challenger_letters, opponent_letters, new_setter, now, game_id),
         )

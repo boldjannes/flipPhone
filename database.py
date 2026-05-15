@@ -131,6 +131,12 @@ def init_db():
     except sqlite3.OperationalError:
         pass  # column already exists
 
+    # Migration: store setter's samples alongside current_line
+    try:
+        conn.execute("ALTER TABLE games ADD COLUMN current_line_samples TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists
+
     # Migration: make recordings.key_id nullable and add user_id (references game_users)
     cols = {row[1] for row in conn.execute("PRAGMA table_info(recordings)").fetchall()}
     if 'user_id' not in cols:

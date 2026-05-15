@@ -135,7 +135,6 @@ def delete_recording(rec_id):
 # /lab/api/references
 # ──────────────────────────────────────────────
 @lab.route('/api/references', methods=['GET'])
-@require_lab
 def get_references():
     db = get_db()
     rows = db.execute(

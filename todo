@@ -1,5 +1,8 @@
 - (rotationsachsen fixen)
+- schatten in die animationen einbauen
+- im lab bei den trick buttons anzeigen wieviele    jeweils aufgenommen wurden
+- admin/training:   - form centern
+                    - bei jedem trick anzeigen wieviele samples schon aufgenommen wurden
 - animation auch in Game of Skate anzeigen
-- Modelle löschen funktion
-- beim spiel und playground nur die tricks anzeigen, die auch tatsächlich im ML Service trainiert wurden (aktuell 8 Tricks)
 - tricks die in spielen und playground aufgenommen werden sollen auch in der Datenbank gespeichert werden
+- im spiel der spiele tab funktion? wieso dieser rote chip

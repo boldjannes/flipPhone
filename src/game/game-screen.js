@@ -251,7 +251,7 @@ export function _gsRenderSetter(game) {
   // Trick pills area
   const pillArea = _gs("div", "gs-pill-area");
   pillArea.id = "gs-setter-pills";
-  _gsLine.forEach((t) => pillArea.appendChild(_gsTrickPill(t, "done")));
+  _gsLine.forEach((e) => pillArea.appendChild(_gsTrickPill(e.trick, "done")));
   c.appendChild(pillArea);
 
   // Counter
@@ -327,7 +327,7 @@ export async function _gsSetterToggleRecord() {
       const result = await _gsRecorder.stopAndPredict();
 
       if (result.confidence >= _gsRecorder.confidenceThreshold) {
-        _gsLine.push(result.trick);
+        _gsLine.push({ trick: result.trick, samples: result.samples });
 
         if (_gsLine.length >= 3) {
           _gsShowReplay(result.samples, result.trick, "setter-done");
@@ -408,7 +408,10 @@ export async function _gsSetterSubmit() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ tricks: _gsLine }),
+      body: JSON.stringify({
+        tricks: _gsLine.map(e => e.trick),
+        samples_per_trick: _gsLine.map(e => e.samples),
+      }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -477,8 +480,9 @@ export function _gsRenderMatcher(game) {
 
   // Trick reference card + animation for current trick
   if (line[_gsMatchIndex]) {
-    c.appendChild(_gsTrickRef(line[_gsMatchIndex]));
-    _gsStartRefAnim(line[_gsMatchIndex]);
+    const currentSamples = (game.current_line_samples || [])[_gsMatchIndex];
+    c.appendChild(_gsTrickRef(line[_gsMatchIndex], currentSamples));
+    _gsStartRefAnim(currentSamples);
   }
 
   // Status
@@ -496,7 +500,7 @@ export function _gsRenderMatcher(game) {
   c.appendChild(actions);
 }
 
-export function _gsTrickRef(trickId) {
+export function _gsTrickRef(trickId, samples) {
   const name = trickId.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   const hint = TRICK_HINTS[trickId] || "";
   const card = _gs("div", "gs-trick-ref");
@@ -504,8 +508,7 @@ export function _gsTrickRef(trickId) {
   card.appendChild(_gs("div", "gs-trick-ref-label", "Gegner-Trick"));
   card.appendChild(_gs("div", "gs-trick-ref-name", name));
 
-  const ref = _gsReferences[trickId];
-  if (ref && ref.samples && ref.samples.length > 1) {
+  if (samples && samples.length > 1) {
     const canvasWrap = _gs("div", "gs-ref-canvas-wrap");
     const canvas = _gs("canvas", "gs-ref-canvas");
     canvas.id = "gs-ref-canvas";
@@ -517,11 +520,10 @@ export function _gsTrickRef(trickId) {
   return card;
 }
 
-export function _gsStartRefAnim(trickId) {
-  const ref = _gsReferences[trickId];
-  if (!ref || !ref.samples || ref.samples.length < 2) return;
+export function _gsStartRefAnim(samples) {
+  if (!samples || samples.length < 2) return;
   const canvas = document.getElementById("gs-ref-canvas");
-  if (canvas) startCanvasAnim(canvas, ref.samples);
+  if (canvas) startCanvasAnim(canvas, samples);
 }
 
 export async function _gsMatcherToggleRecord() {
@@ -575,9 +577,10 @@ export async function _gsMatcherToggleRecord() {
           if (refCard && line[_gsMatchIndex]) {
             const oldCanvas = document.getElementById("gs-ref-canvas");
             if (oldCanvas) stopCanvasAnim(oldCanvas);
-            const newRef = _gsTrickRef(line[_gsMatchIndex]);
+            const nextSamples = (_gsGame.current_line_samples || [])[_gsMatchIndex];
+            const newRef = _gsTrickRef(line[_gsMatchIndex], nextSamples);
             refCard.replaceWith(newRef);
-            _gsStartRefAnim(line[_gsMatchIndex]);
+            _gsStartRefAnim(nextSamples);
           }
           btn.textContent = "Trick aufnehmen";
           btn.disabled = false;
