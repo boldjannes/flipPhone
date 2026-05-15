@@ -68,6 +68,10 @@ export function getQAtTime(samples, orientations, time) {
   ]);
 }
 
+function _applyQ(pivot, q) {
+  pivot.quaternion.set(q[1], q[2], q[3], q[0]);
+}
+
 // ── Three.js shared GLB ────────────────────────
 
 const MODEL_URL = '/static/models/skateboard.glb';
@@ -109,7 +113,12 @@ function _buildRenderer(canvas) {
   return { renderer, scene, camera };
 }
 
+// MODEL_ROTATION: adjust until board appears in correct neutral pose.
+const MODEL_ROTATION = new THREE.Euler(-Math.PI / 2, 0, 0);
+
 function _cloneModel(gltf, scene) {
+  const pivot = new THREE.Group();
+
   const model = gltf.scene.clone(true);
   const box   = new THREE.Box3().setFromObject(model);
   const size  = box.getSize(new THREE.Vector3());
@@ -117,13 +126,11 @@ function _cloneModel(gltf, scene) {
   const scale = 2.2 / Math.max(size.x, size.y, size.z);
   model.scale.setScalar(scale);
   model.position.copy(center.negate().multiplyScalar(scale));
-  scene.add(model);
-  return model;
-}
+  model.rotation.copy(MODEL_ROTATION);
 
-function _applyQ(model, q) {
-  // sensor q is [w, x, y, z]; THREE.Quaternion is (x, y, z, w)
-  model.quaternion.set(q[1], q[2], q[3], q[0]);
+  pivot.add(model);
+  scene.add(pivot);
+  return pivot;
 }
 
 // ── Controlled scene (review overlay / scrubbing) ─
