@@ -46,7 +46,23 @@ export let _gsReferences = {};
 export const GS = {
   overlay: () => document.getElementById("game-screen"),
   content: () => document.getElementById("gs-content"),
+  footer: () => document.getElementById("gs-footer"),
 };
+
+function _gsClearFooter() {
+  const f = GS.footer();
+  if (!f) return;
+  f.innerHTML = "";
+  f.classList.remove("active");
+}
+
+function _gsShowFooter(actionsEl) {
+  const f = GS.footer();
+  if (!f) return;
+  f.innerHTML = "";
+  f.appendChild(actionsEl);
+  f.classList.add("active");
+}
 
 // ──────────────────────────────────────────────
 // DOM helpers
