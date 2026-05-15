@@ -118,17 +118,27 @@ const MODEL_ROTATION = new THREE.Euler(Math.PI / 2, Math.PI / 2, 0);
 
 function _cloneModel(gltf, scene) {
   const pivot = new THREE.Group();
-
   const model = gltf.scene.clone(true);
-  const box   = new THREE.Box3().setFromObject(model);
-  const size  = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const scale = 2.2 / Math.max(size.x, size.y, size.z);
-  model.scale.setScalar(scale);
-  model.position.copy(center.negate().multiplyScalar(scale));
-  model.rotation.copy(MODEL_ROTATION);
 
-  pivot.add(model);
+  // 1. Measure bounding box before any rotation
+  model.updateMatrixWorld(true);
+  const box    = new THREE.Box3().setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  const size   = box.getSize(new THREE.Vector3());
+  const scale  = 2.2 / Math.max(size.x, size.y, size.z);
+
+  // 2. Shift model so geometric center sits at local origin
+  const centered = new THREE.Group();
+  centered.position.copy(center.negate());
+  centered.add(model);
+
+  // 3. Scale + MODEL_ROTATION now rotate around that centered origin
+  const transformed = new THREE.Group();
+  transformed.scale.setScalar(scale);
+  transformed.rotation.copy(MODEL_ROTATION);
+  transformed.add(centered);
+
+  pivot.add(transformed);
   scene.add(pivot);
   return pivot;
 }
