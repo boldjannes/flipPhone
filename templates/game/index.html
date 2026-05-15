@@ -853,6 +853,59 @@
         to   { opacity: 1; transform: translateY(0); }
       }
 
+      /* ── Trick replay (setter) ── */
+      .gs-replay-wrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+      }
+      .gs-replay-chip {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--bg);
+        background: var(--accent);
+        padding: 3px 10px;
+        align-self: center;
+      }
+      .gs-replay-name {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--text);
+        letter-spacing: -0.02em;
+        line-height: 1;
+        text-align: center;
+      }
+      .gs-replay-canvas-wrap {
+        width: 100%;
+        flex: 1;
+        min-height: 160px;
+        max-height: 300px;
+        background: #0d0d0d;
+      }
+      canvas.gs-replay-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ── Reference animation (matcher) ── */
+      .gs-ref-canvas-wrap {
+        width: 100%;
+        height: 140px;
+        background: #0d0d0d;
+        margin: 8px 0 4px;
+      }
+      canvas.gs-ref-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
       /* ── Toast ── */
       #toast {
         position: fixed;

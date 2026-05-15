@@ -162,7 +162,7 @@ export class GameRecorder {
       this.onTrickDetected(result);
     }
 
-    return result;
+    return { ...result, samples };
   }
 
   /**

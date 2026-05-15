@@ -3,6 +3,7 @@
 import { getToken, getCachedUser } from "./auth.js";
 import { GameRecorder } from "./game-recorder.js";
 import { SensorKit } from "../shared/sensor.js";
+import { startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
 
 /**
  * Game Screen — fullscreen overlay for active gameplay.
@@ -40,6 +41,7 @@ export let _gsLine = [];
 export let _gsRecording = false;
 export let _gsSubmitting = false;
 export let _gsWaitTimer = null;
+export let _gsReferences = {};
 
 export const GS = {
   overlay: () => document.getElementById("game-screen"),
@@ -142,6 +144,16 @@ export function _esc(s) {
 }
 
 // ──────────────────────────────────────────────
+// Reference recordings (for matcher animation)
+// ──────────────────────────────────────────────
+export async function _gsLoadReferences() {
+  try {
+    const r = await fetch('/lab/api/references');
+    if (r.ok) _gsReferences = await r.json();
+  } catch (_) {}
+}
+
+// ──────────────────────────────────────────────
 // Open game screen
 // ──────────────────────────────────────────────
 export async function openGame(gameId) {
@@ -154,12 +166,13 @@ export async function openGame(gameId) {
   GS.overlay().classList.remove("hidden");
   GS.content().innerHTML = '<div class="gs-loading">Laden...</div>';
 
-  // Fetch game state
+  // Fetch game state and references in parallel
   try {
     const token = getToken();
-    const resp = await fetch(`/game/api/games/${gameId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const [resp] = await Promise.all([
+      fetch(`/game/api/games/${gameId}`, { headers: { Authorization: `Bearer ${token}` } }),
+      _gsLoadReferences(),
+    ]);
     if (!resp.ok) throw new Error("Game not found");
     _gsGame = await resp.json();
   } catch (err) {
@@ -176,7 +189,15 @@ export async function openGame(gameId) {
   _gsRender();
 }
 
+export function _gsStopAnims() {
+  ["gs-replay-canvas", "gs-ref-canvas"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) stopCanvasAnim(el);
+  });
+}
+
 export function closeGame() {
+  _gsStopAnims();
   if (_gsRecorder) _gsRecorder.abort();
   if (_gsWaitTimer) { clearInterval(_gsWaitTimer); _gsWaitTimer = null; }
   _gsGameId = null;
@@ -213,6 +234,7 @@ export function _gsRender() {
 // Sub-Screen A: Setter
 // ──────────────────────────────────────────────
 export function _gsRenderSetter(game) {
+  _gsStopAnims();
   const c = GS.content();
   c.innerHTML = "";
 
@@ -306,14 +328,13 @@ export async function _gsSetterToggleRecord() {
 
       if (result.confidence >= _gsRecorder.confidenceThreshold) {
         _gsLine.push(result.trick);
-        _gsShowDetectFlash(result.trick, result.confidence, true);
 
         if (_gsLine.length >= 3) {
-          await _gsSetterSubmit();
+          _gsShowReplay(result.samples, result.trick, "setter-done");
           return;
         }
 
-        setTimeout(() => _gsRenderSetter(_gsGame), 700);
+        _gsShowReplay(result.samples, result.trick, "setter-next");
       } else {
         _gsShowDetectFlash(result.trick, result.confidence, false);
         if (status) status.textContent = "Nicht erkannt – nochmal versuchen!";
@@ -330,6 +351,44 @@ export async function _gsSetterToggleRecord() {
       btn.classList.remove("gs-btn-recording");
     }
   }
+}
+
+// ──────────────────────────────────────────────
+// Trick replay screen (looping, no controls)
+// ──────────────────────────────────────────────
+export function _gsShowReplay(samples, trick, mode) {
+  // mode: "setter-next" | "setter-done" | "matcher-next" | "matcher-done"
+  _gsStopAnims();
+  const c = GS.content();
+  c.innerHTML = "";
+
+  const name = trick.replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
+
+  const wrap = _gs("div", "gs-replay-wrap");
+
+  wrap.appendChild(_gs("div", "gs-replay-chip", "Deine Aufnahme"));
+  wrap.appendChild(_gs("div", "gs-replay-name", name));
+
+  const canvasWrap = _gs("div", "gs-replay-canvas-wrap");
+  const canvas = _gs("canvas", "gs-replay-canvas");
+  canvas.id = "gs-replay-canvas";
+  canvasWrap.appendChild(canvas);
+  wrap.appendChild(canvasWrap);
+
+  const btnLabel = mode === "setter-done" ? "Line absenden" : "Weiter";
+  const btn = _gs("button", "gs-submit-btn accent-btn", btnLabel);
+  btn.addEventListener("click", () => {
+    stopCanvasAnim(canvas);
+    if (mode === "setter-done") {
+      _gsSetterSubmit();
+    } else {
+      _gsRenderSetter(_gsGame);
+    }
+  });
+  wrap.appendChild(btn);
+
+  c.appendChild(wrap);
+  startCanvasAnim(canvas, samples);
 }
 
 export async function _gsSetterSubmit() {
@@ -373,6 +432,7 @@ export let _gsMatchIndex = 0;
 export let _gsMatchFailed = false;
 
 export function _gsRenderMatcher(game) {
+  _gsStopAnims();
   const c = GS.content();
   c.innerHTML = "";
   _gsMatchIndex = 0;
@@ -415,9 +475,10 @@ export function _gsRenderMatcher(game) {
     c.appendChild(banner);
   }
 
-  // Trick reference card for current trick
+  // Trick reference card + animation for current trick
   if (line[_gsMatchIndex]) {
     c.appendChild(_gsTrickRef(line[_gsMatchIndex]));
+    _gsStartRefAnim(line[_gsMatchIndex]);
   }
 
   // Status
@@ -440,10 +501,27 @@ export function _gsTrickRef(trickId) {
   const hint = TRICK_HINTS[trickId] || "";
   const card = _gs("div", "gs-trick-ref");
   card.id = "gs-trick-ref";
-  card.appendChild(_gs("div", "gs-trick-ref-label", "Aktueller Trick"));
+  card.appendChild(_gs("div", "gs-trick-ref-label", "Gegner-Trick"));
   card.appendChild(_gs("div", "gs-trick-ref-name", name));
+
+  const ref = _gsReferences[trickId];
+  if (ref && ref.samples && ref.samples.length > 1) {
+    const canvasWrap = _gs("div", "gs-ref-canvas-wrap");
+    const canvas = _gs("canvas", "gs-ref-canvas");
+    canvas.id = "gs-ref-canvas";
+    canvasWrap.appendChild(canvas);
+    card.appendChild(canvasWrap);
+  }
+
   if (hint) card.appendChild(_gs("div", "gs-trick-ref-hint", hint));
   return card;
+}
+
+export function _gsStartRefAnim(trickId) {
+  const ref = _gsReferences[trickId];
+  if (!ref || !ref.samples || ref.samples.length < 2) return;
+  const canvas = document.getElementById("gs-ref-canvas");
+  if (canvas) startCanvasAnim(canvas, ref.samples);
 }
 
 export async function _gsMatcherToggleRecord() {
@@ -495,8 +573,11 @@ export async function _gsMatcherToggleRecord() {
         setTimeout(() => {
           const refCard = document.getElementById("gs-trick-ref");
           if (refCard && line[_gsMatchIndex]) {
+            const oldCanvas = document.getElementById("gs-ref-canvas");
+            if (oldCanvas) stopCanvasAnim(oldCanvas);
             const newRef = _gsTrickRef(line[_gsMatchIndex]);
             refCard.replaceWith(newRef);
+            _gsStartRefAnim(line[_gsMatchIndex]);
           }
           btn.textContent = "Trick aufnehmen";
           btn.disabled = false;
