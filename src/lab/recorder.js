@@ -1,6 +1,6 @@
 "use strict";
 
-import { computeOrientations, getQAtTime, drawPhone3D } from "../shared/phone-animation.js";
+import { computeOrientations, getQAtTime, createPhoneScene, startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
 
 // ─── State ─────────────────────────────────────
 export let TRICKS = [];
@@ -205,16 +205,11 @@ export function updateTimer() {
 
 // ─── 3D Animation ──────────────────────────────
 export const anim = { orientations:[], samples:[], playing:false, currentTime:0,
-                totalTime:0, speed:0.5, rafId:null, lastFrame:null };
+                totalTime:0, speed:0.5, rafId:null, lastFrame:null, scene:null };
 
 export function renderAnimFrame() {
-  const canvas = $('anim-canvas');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.clientWidth, H = canvas.clientHeight;
-  canvas.width = W; canvas.height = H;
-  ctx.clearRect(0, 0, W, H);
-  if (anim.orientations.length < 2) return;
-  drawPhone3D(ctx, W, H, getQAtTime(anim.samples, anim.orientations, anim.currentTime));
+  if (!anim.scene || anim.orientations.length < 2) return;
+  anim.scene.render(getQAtTime(anim.samples, anim.orientations, anim.currentTime));
 }
 
 export function animLoop() {
@@ -244,16 +239,18 @@ export function stopAnim() {
   if (anim.rafId) { cancelAnimationFrame(anim.rafId); anim.rafId = null; }
 }
 
-export function initAnim(samples) {
+export async function initAnim(samples) {
+  if (anim.scene) { anim.scene.dispose(); anim.scene = null; }
   anim.samples = samples;
   anim.orientations = computeOrientations(samples);
   anim.totalTime = samples.length > 0 ? samples[samples.length-1].t : 0;
   anim.currentTime = 0; anim.playing = false; anim.lastFrame = null;
 
-  const scrubber = $('anim-scrubber');
+  anim.scene = await createPhoneScene($('anim-canvas'));
   anim.speed = parseFloat($('anim-speed').value);
   renderAnimFrame();
 
+  const scrubber = $('anim-scrubber');
   $('anim-play').onclick = () => anim.playing ? stopAnim() : startAnim();
   scrubber.oninput = () => {
     anim.currentTime = (parseFloat(scrubber.value) / 100) * anim.totalTime;
@@ -273,10 +270,7 @@ export async function loadReferences() {
   } catch (_) {}
 }
 
-export const refAnim = { orientations:[], samples:[], totalTime:0, currentTime:0,
-                  rafId:null, lastFrame:null, active:false };
-
-export function showRefAnimation(trick) {
+export async function showRefAnimation(trick) {
   stopRefAnimation();
   const card = $('ref-card');
   const ref = references[trick];
@@ -286,35 +280,11 @@ export function showRefAnimation(trick) {
   }
   $('ref-trick-label').textContent = trick;
   card.classList.remove('hidden');
-  refAnim.samples = ref.samples;
-  refAnim.orientations = computeOrientations(ref.samples);
-  refAnim.totalTime = ref.samples[ref.samples.length - 1].t;
-  refAnim.currentTime = 0;
-  refAnim.active = true;
-  refAnim.lastFrame = performance.now();
-  refAnimLoop();
+  await startCanvasAnim($('ref-canvas'), ref.samples);
 }
 
 export function stopRefAnimation() {
-  refAnim.active = false;
-  if (refAnim.rafId) { cancelAnimationFrame(refAnim.rafId); refAnim.rafId = null; }
-}
-
-export function refAnimLoop() {
-  if (!refAnim.active) return;
-  const now = performance.now(), dt = now - refAnim.lastFrame;
-  refAnim.lastFrame = now;
-  refAnim.currentTime += dt * 0.5;
-  if (refAnim.currentTime >= refAnim.totalTime) refAnim.currentTime = 0;
-  const canvas = $('ref-canvas');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.clientWidth, H = canvas.clientHeight;
-  canvas.width = W; canvas.height = H;
-  ctx.clearRect(0, 0, W, H);
-  if (refAnim.orientations.length >= 2) {
-    drawPhone3D(ctx, W, H, getQAtTime(refAnim.samples, refAnim.orientations, refAnim.currentTime));
-  }
-  refAnim.rafId = requestAnimationFrame(refAnimLoop);
+  stopCanvasAnim($('ref-canvas'));
 }
 
 // ─── Review sheet ──────────────────────────────
@@ -324,11 +294,12 @@ export function openReview(rec) {
     `${(rec.durationMs/1000).toFixed(2)}s · ${rec.sampleCount} samples · ${rec.sampleRateHz} Hz`;
   $('review-overlay').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
-  requestAnimationFrame(() => initAnim(rec.samples));
+  initAnim(rec.samples);
 }
 
 export function closeReview() {
   stopAnim();
+  if (anim.scene) { anim.scene.dispose(); anim.scene = null; }
   $('review-overlay').classList.add('hidden');
   document.body.style.overflow = '';
   state.pendingRecording = null;

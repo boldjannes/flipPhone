@@ -1,5 +1,8 @@
 "use strict";
 
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
 // ── Quaternion math [w, x, y, z] ──────────────
 
 export function qMul(a, b) {
@@ -65,92 +68,120 @@ export function getQAtTime(samples, orientations, time) {
   ]);
 }
 
-// ── 3D rendering ──────────────────────────────
+// ── Three.js shared GLB ────────────────────────
 
-export function _project(p, m, cx, cy, scale, dist) {
-  const rx = m[0]*p[0]+m[1]*p[1]+m[2]*p[2];
-  const ry = m[3]*p[0]+m[4]*p[1]+m[5]*p[2];
-  const rz = m[6]*p[0]+m[7]*p[1]+m[8]*p[2];
-  const z  = dist + rz;
-  const f  = dist / Math.max(z, 0.1);
-  return [cx + rx*scale*f, cy - ry*scale*f, z];
+const MODEL_URL = '/static/models/skateboard.glb';
+let _gltfPromise = null;
+
+function _loadModel() {
+  if (!_gltfPromise) {
+    const loader = new GLTFLoader();
+    _gltfPromise = new Promise((resolve, reject) =>
+      loader.load(MODEL_URL, resolve, undefined, reject)
+    );
+  }
+  return _gltfPromise;
 }
 
-export function drawPhone3D(ctx, W, H, q) {
-  const m = qToMatrix(q);
-  const cx = W/2, cy = H/2, scale = Math.min(W,H)*0.28, dist = 4;
-  const pw=0.5, ph=1.0, pd=0.08;
-  const hw=pw/2, hh=ph/2, hd=pd/2;
-  const corners = [
-    [-hw,-hh,-hd],[hw,-hh,-hd],[hw,hh,-hd],[-hw,hh,-hd],
-    [-hw,-hh, hd],[hw,-hh, hd],[hw,hh, hd],[-hw,hh, hd],
-  ];
-  const proj = corners.map(p => _project(p, m, cx, cy, scale, dist));
-  const faces = [
-    {idx:[0,1,2,3], color:'#1a1a1a', screen:false},
-    {idx:[4,5,6,7], color:'#2a2a2a', screen:true },
-    {idx:[0,1,5,4], color:'#222',    screen:false},
-    {idx:[2,3,7,6], color:'#222',    screen:false},
-    {idx:[0,3,7,4], color:'#252525', screen:false},
-    {idx:[1,2,6,5], color:'#252525', screen:false},
-  ].map(f => {
-    const ps = f.idx.map(i => proj[i]);
-    const avgZ = ps.reduce((s,p) => s+p[2], 0) / ps.length;
-    const cross = (ps[1][0]-ps[0][0])*(ps[3][1]-ps[0][1]) -
-                  (ps[1][1]-ps[0][1])*(ps[3][0]-ps[0][0]);
-    return {...f, ps, avgZ, cross};
-  }).sort((a,b) => a.avgZ - b.avgZ);
+function _buildRenderer(canvas) {
+  const W = canvas.clientWidth  || canvas.offsetWidth  || 200;
+  const H = canvas.clientHeight || canvas.offsetHeight || 200;
 
-  for (const f of faces) {
-    ctx.beginPath();
-    ctx.moveTo(f.ps[0][0], f.ps[0][1]);
-    for (let i = 1; i < f.ps.length; i++) ctx.lineTo(f.ps[i][0], f.ps[i][1]);
-    ctx.closePath();
-    ctx.fillStyle = f.color; ctx.fill();
-    ctx.strokeStyle = '#444'; ctx.lineWidth = 1; ctx.stroke();
-    if (f.screen && f.cross < 0) {
-      const inset = 0.07;
-      const sc = [
-        [-hw+inset*pw,-hh+inset*ph,hd+.001],[hw-inset*pw,-hh+inset*ph,hd+.001],
-        [ hw-inset*pw, hh-inset*ph,hd+.001],[-hw+inset*pw, hh-inset*ph,hd+.001],
-      ];
-      const sp = sc.map(p => _project(p, m, cx, cy, scale, dist));
-      ctx.beginPath(); ctx.moveTo(sp[0][0],sp[0][1]);
-      for (let i=1;i<sp.length;i++) ctx.lineTo(sp[i][0],sp[i][1]);
-      ctx.closePath(); ctx.fillStyle='#003344'; ctx.fill();
-      const ny = -hh+inset*ph*1.5;
-      const np = [[-0.04,ny,hd+.002],[0.04,ny,hd+.002]].map(p => _project(p,m,cx,cy,scale,dist));
-      ctx.beginPath();
-      ctx.arc((np[0][0]+np[1][0])/2, (np[0][1]+np[1][1])/2, 3, 0, Math.PI*2);
-      ctx.fillStyle='#001a22'; ctx.fill();
-    }
-  }
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setClearColor(0x000000, 0);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(W, H);
+
+  const scene = new THREE.Scene();
+
+  const camera = new THREE.PerspectiveCamera(42, W / H, 0.01, 100);
+  camera.position.set(0, 0.6, 4);
+  camera.lookAt(0, 0, 0);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+  const key = new THREE.DirectionalLight(0xffffff, 1.8);
+  key.position.set(2, 4, 3);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xffffff, 0.5);
+  fill.position.set(-3, -1, -2);
+  scene.add(fill);
+
+  return { renderer, scene, camera };
+}
+
+function _cloneModel(gltf, scene) {
+  const model = gltf.scene.clone(true);
+  const box   = new THREE.Box3().setFromObject(model);
+  const size  = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const scale = 2.2 / Math.max(size.x, size.y, size.z);
+  model.scale.setScalar(scale);
+  model.position.copy(center.negate().multiplyScalar(scale));
+  scene.add(model);
+  return model;
+}
+
+function _applyQ(model, q) {
+  // sensor q is [w, x, y, z]; THREE.Quaternion is (x, y, z, w)
+  model.quaternion.set(q[1], q[2], q[3], q[0]);
+}
+
+// ── Controlled scene (review overlay / scrubbing) ─
+
+export async function createPhoneScene(canvas) {
+  const gltf = await _loadModel();
+  const { renderer, scene, camera } = _buildRenderer(canvas);
+  const model = _cloneModel(gltf, scene);
+
+  return {
+    render(q) {
+      _applyQ(model, q);
+      renderer.render(scene, camera);
+    },
+    resize() {
+      const W = canvas.clientWidth  || canvas.offsetWidth;
+      const H = canvas.clientHeight || canvas.offsetHeight;
+      if (!W || !H) return;
+      renderer.setSize(W, H);
+      camera.aspect = W / H;
+      camera.updateProjectionMatrix();
+    },
+    dispose() {
+      renderer.dispose();
+    },
+  };
 }
 
 // ── Looping per-canvas animation ──────────────
 
 export const _canvasAnims = new Map();
 
-export function startCanvasAnim(canvas, samples) {
-  const ori = computeOrientations(samples);
+export async function startCanvasAnim(canvas, samples) {
+  stopCanvasAnim(canvas);
+
+  const gltf = await _loadModel();
+  const { renderer, scene, camera } = _buildRenderer(canvas);
+  const model = _cloneModel(gltf, scene);
+
+  const orientations = computeOrientations(samples);
   const totalTime = samples.length > 0 ? samples[samples.length-1].t : 0;
-  const st = { samples, ori, totalTime, currentTime: 0, lastFrame: null, rafId: null };
+
+  const st = {
+    renderer, scene, camera, model,
+    samples, orientations, totalTime,
+    currentTime: 0, lastFrame: null, rafId: null,
+  };
   _canvasAnims.set(canvas, st);
 
   function frame(now) {
-    if (!st.rafId) return;
+    if (!_canvasAnims.has(canvas)) return;
     if (st.lastFrame !== null) {
       st.currentTime += (now - st.lastFrame) * 0.6;
       if (st.currentTime >= st.totalTime) st.currentTime = 0;
     }
     st.lastFrame = now;
-    const W = canvas.clientWidth  || canvas.width;
-    const H = canvas.clientHeight || canvas.height;
-    canvas.width  = W;
-    canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, W, H);
-    if (ori.length >= 2) drawPhone3D(ctx, W, H, getQAtTime(st.samples, st.ori, st.currentTime));
+    _applyQ(st.model, getQAtTime(st.samples, st.orientations, st.currentTime));
+    st.renderer.render(st.scene, st.camera);
     st.rafId = requestAnimationFrame(frame);
   }
   st.rafId = requestAnimationFrame(frame);
@@ -158,6 +189,9 @@ export function startCanvasAnim(canvas, samples) {
 
 export function stopCanvasAnim(canvas) {
   const st = _canvasAnims.get(canvas);
-  if (st && st.rafId) { cancelAnimationFrame(st.rafId); st.rafId = null; }
-  _canvasAnims.delete(canvas);
+  if (st) {
+    if (st.rafId) cancelAnimationFrame(st.rafId);
+    st.renderer.dispose();
+    _canvasAnims.delete(canvas);
+  }
 }
