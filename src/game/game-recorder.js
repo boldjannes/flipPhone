@@ -44,7 +44,7 @@ var loadTrickMap = async function() {
   } catch { /* ignore */ }
 };
 
-var normalizeTrick = function(raw) {
+export var normalizeTrick = function(raw) {
   if (!_trickNameToId) return raw;
   return _trickNameToId[raw] || raw;
 };

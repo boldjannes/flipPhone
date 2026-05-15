@@ -1,7 +1,7 @@
 "use strict";
 
 import { getToken, getCachedUser } from "./auth.js";
-import { GameRecorder } from "./game-recorder.js";
+import { GameRecorder, normalizeTrick } from "./game-recorder.js";
 import { SensorKit } from "../shared/sensor.js";
 import { startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
 
