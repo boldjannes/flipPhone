@@ -87,7 +87,7 @@ function _buildRenderer(canvas) {
   const W = canvas.clientWidth  || canvas.offsetWidth  || 200;
   const H = canvas.clientHeight || canvas.offsetHeight || 200;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, premultipliedAlpha: false });
   renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(W, H);
