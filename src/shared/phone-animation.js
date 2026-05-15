@@ -151,9 +151,9 @@ function _buildRenderer(canvas) {
   scene.add(fill);
 
   // Invisible light purely for shadow projection onto the screen plane.
-  // Positioned near the camera so the shadow falls roughly behind the board.
+  // Offset to the upper-right so the shadow falls visibly to the lower-left.
   const shadowLight = new THREE.DirectionalLight(0xffffff, 0);
-  shadowLight.position.set(0.5, 2, 5);
+  shadowLight.position.set(3, 2, 4);
   shadowLight.castShadow = true;
   shadowLight.shadow.mapSize.width  = 512;
   shadowLight.shadow.mapSize.height = 512;
@@ -212,10 +212,12 @@ export async function createPhoneScene(canvas) {
   const gltf = await _loadModel();
   const { renderer, scene, camera } = _buildRenderer(canvas);
   const model = _cloneModel(gltf, scene);
+  const shadow = _buildShadow(scene, model);
 
   return {
-    render(q) {
+    render(q, h = 0) {
       _applyQ(model, q);
+      _updateShadow(shadow, model, h);
       renderer.render(scene, camera);
     },
     resize() {

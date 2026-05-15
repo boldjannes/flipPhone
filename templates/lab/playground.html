@@ -173,6 +173,18 @@
     }
     .pg-results.hidden { display: none; }
 
+    .pg-anim-wrap {
+      width: 100%;
+      height: 180px;
+      margin-bottom: 16px;
+      border-bottom: 1.5px solid var(--border);
+    }
+    #pg-anim-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
     .pg-trick-name {
       font-size: 2rem;
       font-weight: 700;
@@ -264,6 +276,9 @@
   </div>
 
   <div id="pg-results-card" class="pg-results hidden">
+    <div class="pg-anim-wrap">
+      <canvas id="pg-anim-canvas"></canvas>
+    </div>
     <div id="pg-trick-name" class="pg-trick-name"></div>
     <div id="pg-confidence" class="pg-confidence"></div>
     <div id="pg-chart"></div>

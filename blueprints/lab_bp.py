@@ -132,6 +132,14 @@ def delete_recording(rec_id):
 
 
 # ──────────────────────────────────────────────
+@lab.route('/api/recordings/counts', methods=['GET'])
+@require_lab
+def recording_counts():
+    db = get_db()
+    rows = db.execute('SELECT trick, COUNT(*) as count FROM recordings GROUP BY trick').fetchall()
+    return jsonify({r['trick']: r['count'] for r in rows})
+
+
 # /lab/api/references
 # ──────────────────────────────────────────────
 @lab.route('/api/references', methods=['GET'])

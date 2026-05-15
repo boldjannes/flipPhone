@@ -1,10 +1,11 @@
 "use strict";
 
-import { computeOrientations, getQAtTime, createPhoneScene, startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
+import { computeOrientations, getQAtTime, computeHeightFactors, getHeightAtTime, createPhoneScene, startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
 
 // ─── State ─────────────────────────────────────
 export let TRICKS = [];
 export let references = {};
+export let recordingCounts = {};
 
 export const state = {
   selectedTrick: null,
@@ -24,30 +25,27 @@ export function getToken() { return localStorage.getItem('fp_game_token') || '';
 
 // ─── Tricks ────────────────────────────────────
 export async function loadTricks() {
-  let allTricks = [];
   try {
     const r = await fetch('/game/api/tricks');
-    if (r.ok) allTricks = await r.json(); // [{id, name}, ...]
+    if (r.ok) {
+      const all = await r.json();
+      TRICKS = all.map(t => t.name);
+    }
   } catch (_) {}
-
-  let activeTrickIds = null;
-  try {
-    const r = await fetch('/api/active-tricks');
-    if (r.ok) activeTrickIds = await r.json(); // [id, ...]
-  } catch (_) {}
-
-  let filtered = allTricks;
-  if (activeTrickIds && activeTrickIds.length) {
-    const idSet = new Set(activeTrickIds);
-    filtered = allTricks.filter(t => idSet.has(t.id));
-  }
-
-  TRICKS = filtered.length ? filtered.map(t => t.name) : allTricks.map(t => t.name);
 
   if (!TRICKS.length) {
     TRICKS = ['Kickflip','Heelflip','FS Shuvit','FS 360 Shuvit',
               'BS Shuvit','BS 360 Shuvit','Treflip','Late Kickflip'];
   }
+}
+
+export async function loadRecordingCounts() {
+  try {
+    const r = await fetch('/lab/api/recordings/counts', {
+      headers: { Authorization: 'Bearer ' + getToken() },
+    });
+    if (r.ok) recordingCounts = await r.json();
+  } catch (_) {}
 }
 
 export function buildTrickGrid() {
@@ -56,7 +54,9 @@ export function buildTrickGrid() {
   TRICKS.forEach(trick => {
     const btn = document.createElement('button');
     btn.className = 'trick-btn' + (trick === state.selectedTrick ? ' selected' : '');
-    btn.textContent = trick;
+    btn.dataset.trick = trick;
+    const count = recordingCounts[trick] || 0;
+    btn.innerHTML = `<span class="trick-btn-name">${trick}</span><span class="trick-btn-count">${count}</span>`;
     btn.addEventListener('click', () => selectTrick(trick));
     grid.appendChild(btn);
   });
@@ -68,7 +68,7 @@ export function selectTrick(trick) {
   window._selectedTrick = trick;
   $('selected-trick').textContent = trick;
   document.querySelectorAll('.trick-btn').forEach(b =>
-    b.classList.toggle('selected', b.textContent === trick));
+    b.classList.toggle('selected', b.dataset.trick === trick));
   showRefAnimation(trick);
 }
 
@@ -220,12 +220,14 @@ export function updateTimer() {
 }
 
 // ─── 3D Animation ──────────────────────────────
-export const anim = { orientations:[], samples:[], playing:false, currentTime:0,
+export const anim = { orientations:[], heightFactors:[], samples:[], playing:false, currentTime:0,
                 totalTime:0, speed:0.5, rafId:null, lastFrame:null, scene:null };
 
 export function renderAnimFrame() {
   if (!anim.scene || anim.orientations.length < 2) return;
-  anim.scene.render(getQAtTime(anim.samples, anim.orientations, anim.currentTime));
+  const q = getQAtTime(anim.samples, anim.orientations, anim.currentTime);
+  const h = getHeightAtTime(anim.samples, anim.heightFactors, anim.currentTime);
+  anim.scene.render(q, h);
 }
 
 export function animLoop() {
@@ -259,6 +261,7 @@ export async function initAnim(samples) {
   if (anim.scene) { anim.scene.dispose(); anim.scene = null; }
   anim.samples = samples;
   anim.orientations = computeOrientations(samples);
+  anim.heightFactors = computeHeightFactors(samples);
   anim.totalTime = samples.length > 0 ? samples[samples.length-1].t : 0;
   anim.currentTime = 0; anim.playing = false; anim.lastFrame = null;
 
@@ -339,6 +342,9 @@ export async function saveRecording() {
       throw new Error(err.error || `HTTP ${r.status}`);
     }
     showToast('Recording saved!');
+    await loadRecordingCounts();
+    buildTrickGrid();
+    selectTrick(state.pendingRecording?.trick || state.selectedTrick);
   } catch (e) {
     showToast('Save failed: ' + e.message);
   } finally {
@@ -358,8 +364,7 @@ export function showToast(msg) {
 
 // ─── Init ──────────────────────────────────────
 export async function init() {
-  await loadTricks();
-  await loadReferences();
+  await Promise.all([loadTricks(), loadReferences(), loadRecordingCounts()]);
   state.selectedTrick = TRICKS[0];
   buildTrickGrid();
   $('selected-trick').textContent = state.selectedTrick;

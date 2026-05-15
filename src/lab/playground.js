@@ -1,6 +1,7 @@
 "use strict";
 
 import { SensorKit } from "../shared/sensor.js";
+import { startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
 
 // ──────────────────────────────────────────────
 // State
@@ -223,18 +224,19 @@ export async function submitPrediction() {
   statusMsg.textContent = "Analyzing…";
   resultsCard.classList.add("hidden");
 
+  const samples = state.samples.slice();
   try {
     const resp = await fetch("/api/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ samples: state.samples }),
+      body: JSON.stringify({ samples }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
       throw new Error(err.error || `Server error ${resp.status}`);
     }
     const result = await resp.json();
-    renderResults(result);
+    renderResults(result, samples);
   } catch (err) {
     statusMsg.textContent = "Prediction failed: " + err.message;
   }
@@ -243,7 +245,7 @@ export async function submitPrediction() {
 // ──────────────────────────────────────────────
 // Results
 // ──────────────────────────────────────────────
-export function renderResults(result) {
+export function renderResults(result, samples) {
   trickName.textContent = result.trick;
   confidence.textContent = (result.confidence * 100).toFixed(1) + "% confidence";
 
@@ -269,6 +271,12 @@ export function renderResults(result) {
 
   resultsCard.classList.remove("hidden");
   statusMsg.textContent = "Record again to try another trick!";
+
+  const animCanvas = $("pg-anim-canvas");
+  if (animCanvas && samples && samples.length > 1) {
+    stopCanvasAnim(animCanvas);
+    startCanvasAnim(animCanvas, samples);
+  }
 }
 
 export function escapeHtml(str) {
