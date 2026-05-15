@@ -170,6 +170,20 @@ def create_app():
             log.error('Predict proxy error: %s', e)
             return jsonify({'error': f'Prediction service unavailable: {str(e)}'}), 502
 
+    @app.route('/api/active-tricks', methods=['GET'])
+    def proxy_active_tricks():
+        target = PREDICTION_API_URL.rstrip('/') + '/active-tricks'
+        try:
+            req = urllib.request.Request(target, method='GET')
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = resp.read()
+                return app.response_class(response=body, status=resp.status, mimetype='application/json')
+        except urllib.error.HTTPError as e:
+            body = e.read()
+            return app.response_class(response=body, status=e.code, mimetype='application/json')
+        except Exception as e:
+            return jsonify({'error': f'Prediction service unavailable: {str(e)}'}), 502
+
     @app.route('/api/<path:_path>', methods=['OPTIONS'])
     def options_handler(_path):
         return '', 204

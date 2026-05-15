@@ -1,16 +1,5 @@
-
-Animation-Code aus Duplikat befreien — qMul, qNorm, qToMatrix, drawPhone3D, computeOrientations existieren identisch in lab/app.js (ab Zeile 492) und inlined in tricks.html. Das wird dein Fundament für den 3D-Renderer — wenn du da jetzt anfängst, hast du dreifach duplizierten Code. → static/shared/phone-animation.js extrahieren, beide Stellen darauf umstellen.
-
-Vite-Setup — Three.js als echte Dependency, nicht CDN. Ohne Build-Step wirst du 3D-Modelle, Texturen und Skins nicht vernünftig managen können.
-
-?api_key= in URLs abklemmen — steht in deinen Nginx-Logs im Klartext. Der Export-Endpoint nutzt das aktiv.
-
-CORS einschränken — aktuell *, sollte deine Produktionsdomain sein.
-
-Rate-Limit auf /api/predict — der Proxy ist ohne Auth nutzbar, 5 Minuten mit Flask-Limiter.
-
-später
-
+- (rotationsachsen fixen)
+- animation auch in Game of Skate anzeigen
 - Modelle löschen funktion
 - beim spiel und playground nur die tricks anzeigen, die auch tatsächlich im ML Service trainiert wurden (aktuell 8 Tricks)
 - tricks die in spielen und playground aufgenommen werden sollen auch in der Datenbank gespeichert werden

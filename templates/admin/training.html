@@ -183,27 +183,23 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 
 // ── Training ──────────────────────────────────
 
-const TRICKS = [
-  { id: 'kickflip',      name: 'Kickflip' },
-  { id: 'heelflip',      name: 'Heelflip' },
-  { id: 'fs_shuvit',     name: 'FS Shuvit' },
-  { id: 'fs_360_shuvit', name: 'FS 360 Shuvit' },
-  { id: 'bs_shuvit',     name: 'BS Shuvit' },
-  { id: 'bs_360_shuvit', name: 'BS 360 Shuvit' },
-  { id: 'treflip',       name: 'Treflip' },
-  { id: 'late_kickflip', name: 'Late Kickflip' },
-];
+async function loadTricksForTraining() {
+  const r = await fetch('/admin/api/tricks', { headers: authHeaders() }).catch(() => null);
+  const tricks = (r && r.ok) ? await r.json() : [];
+  document.getElementById('tricks-grid').innerHTML = tricks.length
+    ? tricks.map(t =>
+        `<label class="check-row">
+           <input type="checkbox" class="trick-check" value="${esc(t.id)}" checked>
+           <span>${esc(t.name)}</span>
+         </label>`
+      ).join('')
+    : '<span style="color:var(--dim);font-size:12px">No tricks found.</span>';
+}
 
 let trainPollTimer = null;
 
-function initTrainingForm() {
-  document.getElementById('tricks-grid').innerHTML = TRICKS.map(t =>
-    `<label class="check-row">
-       <input type="checkbox" class="trick-check" value="${t.id}" checked>
-       <span>${esc(t.name)}</span>
-     </label>`
-  ).join('');
-
+async function initTrainingForm() {
+  await loadTricksForTraining();
   loadUsersForTraining();
 
   document.getElementById('users-all').addEventListener('change', e => {

@@ -208,6 +208,12 @@ def model_metrics(model_id):
     return _ml_proxy('GET', f'/models/{model_id}/metrics')
 
 
+@admin.route('/api/models/<model_id>', methods=['DELETE'])
+@require_admin
+def delete_model(model_id):
+    return _ml_proxy('DELETE', f'/models/{model_id}')
+
+
 # ──────────────────────────────────────────────
 # /admin/api/keys
 # ──────────────────────────────────────────────

@@ -24,10 +24,26 @@ export function getToken() { return localStorage.getItem('fp_game_token') || '';
 
 // ─── Tricks ────────────────────────────────────
 export async function loadTricks() {
+  let allTricks = [];
   try {
     const r = await fetch('/game/api/tricks');
-    if (r.ok) TRICKS = (await r.json()).map(t => t.name);
+    if (r.ok) allTricks = await r.json(); // [{id, name}, ...]
   } catch (_) {}
+
+  let activeTrickIds = null;
+  try {
+    const r = await fetch('/api/active-tricks');
+    if (r.ok) activeTrickIds = await r.json(); // [id, ...]
+  } catch (_) {}
+
+  let filtered = allTricks;
+  if (activeTrickIds && activeTrickIds.length) {
+    const idSet = new Set(activeTrickIds);
+    filtered = allTricks.filter(t => idSet.has(t.id));
+  }
+
+  TRICKS = filtered.length ? filtered.map(t => t.name) : allTricks.map(t => t.name);
+
   if (!TRICKS.length) {
     TRICKS = ['Kickflip','Heelflip','FS Shuvit','FS 360 Shuvit',
               'BS Shuvit','BS 360 Shuvit','Treflip','Late Kickflip'];

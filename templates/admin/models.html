@@ -197,6 +197,7 @@ function renderModels(models) {
         <td class="cell-actions">
           <button class="btn btn-sm activate-btn" ${active ? 'disabled' : ''}>Activate</button>
           <button class="btn btn-sm btn-ghost details-btn" style="margin-left:6px">Details</button>
+          ${active ? '' : '<button class="btn btn-sm btn-danger delete-btn" style="margin-left:6px">Delete</button>'}
         </td>
       </tr>`;
   }).join('');
@@ -212,6 +213,23 @@ async function loadModels() {
     return;
   }
   renderModels(await r.json());
+}
+
+async function deleteModel(id, name, btn) {
+  if (!confirm(`Delete model "${name}"? This cannot be undone.`)) return;
+  btn.disabled = true;
+  btn.textContent = '…';
+  const r = await fetch(`/admin/api/models/${encodeURIComponent(id)}`, {
+    method: 'DELETE', headers: authHeaders(),
+  }).catch(() => null);
+  if (r && r.ok) {
+    await loadModels();
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Delete';
+    const msg = r ? ((await r.json().catch(() => ({}))).error || `Error ${r.status}`) : 'Network error';
+    alert('Delete failed: ' + msg);
+  }
 }
 
 async function activateModel(id, btn) {
@@ -235,6 +253,7 @@ document.getElementById('models-tbody').addEventListener('click', e => {
   if (!row) return;
   if (e.target.classList.contains('activate-btn')) activateModel(row.dataset.id, e.target);
   if (e.target.classList.contains('details-btn'))  showMetrics(row.dataset.id, row.dataset.name);
+  if (e.target.classList.contains('delete-btn'))   deleteModel(row.dataset.id, row.dataset.name, e.target);
 });
 
 function startPolling() { stopPolling(); pollTimer = setInterval(loadModels, 30_000); }
