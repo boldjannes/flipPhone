@@ -435,17 +435,12 @@ button:disabled {
 
 /* ── Training form ── */
 .train-layout {
-  display: grid;
-  grid-template-columns: 400px 1fr;
-  gap: 48px;
-  align-items: start;
-  max-width: 960px;
+  max-width: 520px;
   margin: 0 auto;
 }
 
-.train-form-col {
-  display: flex;
-  flex-direction: column;
+#train-status-section {
+  margin-top: 40px;
 }
 
 .checkbox-grid {
