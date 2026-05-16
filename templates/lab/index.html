@@ -369,7 +369,6 @@
           <th>Trick</th>
           <th>Collector</th>
           <th>Duration</th>
-          <th>Samples</th>
           <th>Date</th>
           <th>Ref</th>
           <th></th>
@@ -424,16 +423,15 @@ function fmtDate(iso) { return iso ? iso.replace('T',' ').slice(0,16) : ''; }
 function renderTable(recs) {
   const tbody = document.getElementById('rec-tbody');
   if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="table-msg">No recordings.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="table-msg">No recordings.</td></tr>';
     return;
   }
   tbody.innerHTML = recs.map(r => {
     const isRef = refByTrick[r.trick] === r.id;
     return `<tr>
-      <td><strong>${esc(r.trick)}</strong></td>
+      <td><strong>${esc(r.trick)}</strong> <span style="color:var(--dim);font-weight:400">${r.sample_count}</span></td>
       <td>${esc(r.collector || '—')}</td>
       <td>${fmtDur(r.duration_ms)}</td>
-      <td>${r.sample_count}</td>
       <td>${fmtDate(r.created_at)}</td>
       <td><button class="ref-star" data-id="${esc(r.id)}" data-trick="${esc(r.trick)}" data-is-ref="${isRef?1:0}" title="${isRef?'Remove reference':'Set as reference'}">${isRef?'★':'☆'}</button></td>
       <td><button class="btn-sm btn-danger delete-btn" data-id="${esc(r.id)}">Delete</button></td>
