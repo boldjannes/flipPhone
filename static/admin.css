@@ -436,9 +436,16 @@ button:disabled {
 /* ── Training form ── */
 .train-layout {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 400px 1fr;
   gap: 48px;
   align-items: start;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.train-form-col {
+  display: flex;
+  flex-direction: column;
 }
 
 .checkbox-grid {
@@ -451,6 +458,7 @@ button:disabled {
 .check-row {
   display: flex;
   align-items: center;
+  width: 100%;
   gap: 8px;
   font-size: 13px;
   cursor: pointer;

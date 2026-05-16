@@ -155,8 +155,10 @@ export class GameRecorder {
     // Normalize trick name from predict API ("Kickflip" → "kickflip")
     result.trick = normalizeTrick(result.trick);
 
-    // Auto-save recording for data collection (fire-and-forget)
-    this._saveRecording(samples, result.trick);
+    // Auto-save recording for data collection only when confident enough
+    if (result.confidence >= 0.85) {
+      this._saveRecording(samples, result.trick);
+    }
 
     if (this.onTrickDetected) {
       this.onTrickDetected(result);

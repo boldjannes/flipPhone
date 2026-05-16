@@ -245,9 +245,23 @@ export async function submitPrediction() {
 // ──────────────────────────────────────────────
 // Results
 // ──────────────────────────────────────────────
+function _savePlaygroundRecording(samples, trick) {
+  const token = localStorage.getItem('fp_game_token');
+  if (!token) return;
+  fetch('/game/api/recordings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ trick, samples, source: 'playground' }),
+  }).catch(() => {});
+}
+
 export function renderResults(result, samples) {
   trickName.textContent = result.trick;
   confidence.textContent = (result.confidence * 100).toFixed(1) + "% confidence";
+
+  if (result.confidence >= 0.85) {
+    _savePlaygroundRecording(samples, result.trick);
+  }
 
   // Sort probabilities descending
   const probs = Object.entries(result.probabilities).sort((a, b) => b[1] - a[1]);
