@@ -41,9 +41,7 @@ export async function loadTricks() {
 
 export async function loadRecordingCounts() {
   try {
-    const r = await fetch('/lab/api/recordings/counts', {
-      headers: { Authorization: 'Bearer ' + getToken() },
-    });
+    const r = await fetch('/lab/api/recordings/counts');
     if (r.ok) recordingCounts = await r.json();
   } catch (_) {}
 }
@@ -56,7 +54,7 @@ export function buildTrickGrid() {
     btn.className = 'trick-btn' + (trick === state.selectedTrick ? ' selected' : '');
     btn.dataset.trick = trick;
     const count = recordingCounts[trick] || 0;
-    btn.innerHTML = `<span class="trick-btn-name">${trick}</span><span class="trick-btn-count">${count}</span>`;
+    btn.innerHTML = `<span class="trick-btn-name">${trick}</span><span class="trick-btn-count">${count > 0 ? count : '–'}</span>`;
     btn.addEventListener('click', () => selectTrick(trick));
     grid.appendChild(btn);
   });
