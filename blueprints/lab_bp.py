@@ -135,8 +135,13 @@ def delete_recording(rec_id):
 @lab.route('/api/recordings/counts', methods=['GET'])
 def recording_counts():
     db = get_db()
-    rows = db.execute('SELECT trick, COUNT(*) as count FROM recordings GROUP BY trick').fetchall()
-    return jsonify({r['trick']: r['count'] for r in rows})
+    rows = db.execute(
+        '''SELECT t.name, COUNT(*) AS count
+           FROM recordings r
+           JOIN tricks t ON r.trick = t.id
+           GROUP BY r.trick'''
+    ).fetchall()
+    return jsonify({r['name']: r['count'] for r in rows})
 
 
 # /lab/api/references
