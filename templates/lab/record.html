@@ -81,23 +81,18 @@
       min-width: max-content;
     }
     .trick-btn {
-      display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+      display: flex; flex-direction: row; align-items: center; gap: 8px;
       background: var(--bg); color: var(--dim); border: none;
       border-right: 1.5px solid var(--border);
       font-family: var(--font); font-size: 12px; font-weight: 700;
       letter-spacing: 0.04em; text-transform: uppercase;
-      padding: 10px 16px 9px; cursor: pointer;
+      padding: 12px 16px; cursor: pointer;
     }
     .trick-btn:last-child { border-right: none; }
-    .trick-btn.selected { color: var(--text); background: #f0f0f0; }
+    .trick-btn.selected { background: #f0f0f0; }
     .trick-btn:active { background: #e8e8e8; }
-    .trick-btn-count {
-      font-size: 9px; font-weight: 600; letter-spacing: 0.05em;
-      text-transform: none; color: #999;
-      background: rgba(0,0,0,0.07); border-radius: 99px;
-      padding: 1px 6px; line-height: 1.6;
-    }
-    .trick-btn.selected .trick-btn-count { background: rgba(0,0,0,0.1); color: #555; }
+    .trick-btn-name { color: var(--text); }
+    .trick-btn-count { font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; color: #999; }
 
     /* ── Reference card ── */
     .ref-card {

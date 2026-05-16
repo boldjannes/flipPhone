@@ -191,10 +191,10 @@ async function loadTricksForTraining() {
   document.getElementById('tricks-grid').innerHTML = tricks.length
     ? tricks.map(t => {
         const n = counts[t.name] || 0;
-        const badge = `<span style="margin-left:auto;font-size:10px;color:var(--dim);font-weight:400">${n}</span>`;
         return `<label class="check-row">
            <input type="checkbox" class="trick-check" value="${esc(t.id)}" checked>
-           <span>${esc(t.name)}</span>${badge}
+           <span>${esc(t.name)}</span>
+           <span style="font-size:11px;color:var(--dim);font-weight:400;margin-left:6px">${n}</span>
          </label>`;
       }).join('')
     : '<span style="color:var(--dim);font-size:12px">No tricks found.</span>';
