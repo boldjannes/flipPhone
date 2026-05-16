@@ -182,6 +182,17 @@ def init_db():
             [(id_, name) for name, id_ in name_to_id.items() if name != id_],
         )
 
+    # Migration: survival_scores table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS survival_scores (
+            id         TEXT    PRIMARY KEY,
+            user_id    INTEGER NOT NULL REFERENCES game_users(id) ON DELETE CASCADE,
+            score      INTEGER NOT NULL,
+            created_at TEXT    NOT NULL
+        )
+    ''')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_sv_score ON survival_scores(score DESC)')
+
     # Seed default tricks if table is empty
     if conn.execute('SELECT COUNT(*) FROM tricks').fetchone()[0] == 0:
         default_tricks = [

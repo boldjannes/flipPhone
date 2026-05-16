@@ -4,9 +4,11 @@ import { getCachedUser, logout } from "./auth.js";
 import { initFriends, destroyFriends } from "./friends.js";
 import { loadHomeTab, updateHome, loadGamesTab } from "./home.js";
 import { openGame } from "./game-screen.js";
+import { openSurvival } from "./survival.js";
 import { GamePoller } from "./poller.js";
 
 window.navigateToGame = (gameId) => openGame(gameId);
+window.openSurvival   = openSurvival;
 
 let _toastTimer = null;
 function showToast(msg, duration = 2800) {

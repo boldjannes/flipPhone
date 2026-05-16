@@ -1068,6 +1068,92 @@
           border-right: 1.5px solid var(--text);
         }
       }
+
+      /* ── Survival overlay ── */
+      #survival-screen {
+        position: fixed; inset: 0; z-index: 300;
+        background: var(--bg); display: flex; flex-direction: column;
+        max-width: 480px; margin: 0 auto;
+      }
+      #survival-screen.hidden { display: none; }
+      #sv-content {
+        flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+        display: flex; flex-direction: column;
+        padding: 16px; gap: 14px;
+      }
+
+      /* ── Survival UI ── */
+      .sv-center {
+        display: flex; flex-direction: column;
+        align-items: flex-start; gap: 20px; padding: 16px 0;
+      }
+      .sv-title { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+      .sv-desc { font-size: 13px; color: var(--dim); line-height: 1.55; }
+      .sv-skate-preview { margin: 4px 0; }
+      .sv-skate-row { align-self: center; }
+      .sv-score {
+        font-size: 11px; text-transform: uppercase;
+        letter-spacing: 0.1em; color: var(--dim);
+      }
+      .sv-prompt {
+        font-size: 11px; text-transform: uppercase;
+        letter-spacing: 0.1em; color: var(--dim); margin-bottom: -6px;
+      }
+      .sv-trick-name {
+        font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
+      }
+      .sv-status { font-size: 12px; color: var(--dim); text-align: center; }
+      .sv-back-gap { margin-top: 8px; }
+
+      /* ── Flash result ── */
+      .sv-flash {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 10px;
+      }
+      .sv-flash-icon { font-size: 60px; line-height: 1; }
+      .sv-flash-success .sv-flash-icon { color: #22c55e; }
+      .sv-flash-fail    .sv-flash-icon { color: var(--danger); }
+      .sv-flash-trick {
+        font-size: 20px; font-weight: 700; text-transform: capitalize;
+        letter-spacing: -0.3px;
+      }
+      .sv-flash-conf { font-size: 13px; color: var(--dim); }
+
+      /* ── Game over ── */
+      .sv-final-score { font-size: 22px; font-weight: 700; }
+      .sv-new-pr {
+        display: inline-block; font-size: 11px; font-weight: 700;
+        background: var(--text); color: var(--bg);
+        padding: 2px 6px; border-radius: 4px; margin-left: 6px;
+        vertical-align: middle; letter-spacing: 0.04em;
+      }
+      .sv-stats-row {
+        display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;
+        margin: 4px 0;
+      }
+      .sv-stat-box {
+        display: flex; flex-direction: column; align-items: center;
+        min-width: 56px;
+      }
+      .sv-stat-val { font-size: 18px; font-weight: 700; }
+      .sv-stat-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+      .sv-stat-sub { font-size: 10px; color: var(--dim); }
+
+      /* ── Survival entry card (home tab) ── */
+      .survival-card {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 16px; border: 1.5px solid var(--text); cursor: pointer;
+        background: var(--bg); border-radius: 0; gap: 12px;
+        font-family: var(--font);
+      }
+      .survival-card:active { background: #f0f0f0; }
+      .survival-card-info { display: flex; flex-direction: column; gap: 3px; }
+      .survival-card-title {
+        font-size: 13px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .survival-card-sub { font-size: 11px; color: var(--dim); }
+      .survival-card-arrow { font-size: 18px; color: var(--dim); }
     </style>
   </head>
   <body>
@@ -1138,6 +1224,13 @@
 
       <!-- Home Tab -->
       <div id="tab-home" class="app-tab-content active">
+        <div class="survival-card" onclick="openSurvival()">
+          <div class="survival-card-info">
+            <div class="survival-card-title">Survival</div>
+            <div class="survival-card-sub">Solo · Lande so viele Tricks wie möglich</div>
+          </div>
+          <div class="survival-card-arrow">→</div>
+        </div>
         <div id="home-content"></div>
       </div>
 
@@ -1205,6 +1298,11 @@
     <div id="game-screen" class="hidden">
       <div id="gs-content"></div>
       <div id="gs-footer"></div>
+    </div>
+
+    <!-- ════════ SURVIVAL SCREEN (fullscreen overlay) ════════ -->
+    <div id="survival-screen" class="hidden">
+      <div id="sv-content"></div>
     </div>
 
     <!-- ════════ PROFILE OVERLAY ════════ -->

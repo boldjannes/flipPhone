@@ -238,6 +238,69 @@ def list_tricks():
 
 
 # ──────────────────────────────────────────────
+# Survival mode
+# ──────────────────────────────────────────────
+
+@game.route('/game/api/survival/score', methods=['POST'])
+@require_game_session
+def save_survival_score():
+    data  = request.get_json(silent=True) or {}
+    score = data.get('score')
+    if not isinstance(score, int) or score < 0:
+        return jsonify({'error': 'score must be a non-negative integer'}), 400
+
+    me = g.game_user['uid']
+    db = get_db()
+    import uuid
+
+    db.execute(
+        'INSERT INTO survival_scores (id, user_id, score, created_at) VALUES (?, ?, ?, ?)',
+        (str(uuid.uuid4()), me, score, now_iso()),
+    )
+    db.commit()
+
+    pr_row = db.execute(
+        'SELECT MAX(score) AS pr FROM survival_scores WHERE user_id = ?', (me,)
+    ).fetchone()
+    pr = pr_row['pr'] if pr_row else score
+
+    gr_row = db.execute(
+        '''SELECT ss.score, u.display_name, u.username
+           FROM survival_scores ss
+           JOIN game_users u ON ss.user_id = u.id
+           ORDER BY ss.score DESC, ss.created_at ASC
+           LIMIT 1'''
+    ).fetchone()
+    gr = {'score': gr_row['score'], 'name': gr_row['display_name'] or gr_row['username']} if gr_row else None
+
+    rank_row = db.execute(
+        'SELECT COUNT(*) AS c FROM (SELECT MAX(score) s FROM survival_scores GROUP BY user_id) WHERE s > ?',
+        (score,)
+    ).fetchone()
+    rank = (rank_row['c'] + 1) if rank_row else 1
+
+    return jsonify({'pr': pr, 'gr': gr, 'rank': rank})
+
+
+@game.route('/game/api/survival/leaderboard', methods=['GET'])
+@require_game_session
+def survival_leaderboard():
+    db = get_db()
+    rows = db.execute(
+        '''SELECT u.display_name, u.username, MAX(ss.score) AS score
+           FROM survival_scores ss
+           JOIN game_users u ON ss.user_id = u.id
+           GROUP BY ss.user_id
+           ORDER BY score DESC, MIN(ss.created_at) ASC
+           LIMIT 10'''
+    ).fetchall()
+    return jsonify([
+        {'name': r['display_name'] or r['username'], 'score': r['score']}
+        for r in rows
+    ])
+
+
+# ──────────────────────────────────────────────
 # Game recordings (auto-save for ML training data)
 # ──────────────────────────────────────────────
 @game.route('/game/api/recordings', methods=['POST'])
