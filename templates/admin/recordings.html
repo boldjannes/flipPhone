@@ -5,6 +5,30 @@
   <meta name="viewport" content="width=1024">
   <title>Recordings — Admin — flipPhone</title>
   <link rel="stylesheet" href="/static/admin.css">
+  <style>
+    .rec-row { cursor: pointer; }
+    .rec-row:hover td { background: #f5f5f5; }
+    .anim-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.55); align-items: center; justify-content: center;
+    }
+    .anim-modal-overlay.open { display: flex; }
+    .anim-modal {
+      background: #fff; width: min(560px, 96vw);
+      border: 1.5px solid #111; display: flex; flex-direction: column;
+    }
+    .anim-modal-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1.5px solid #111; gap: 12px;
+    }
+    .anim-modal-trick { font-size: 1.2rem; font-weight: 700; }
+    .anim-modal-meta  { font-size: 11px; color: var(--dim); }
+    .anim-modal-close {
+      background: none; border: none; font-size: 20px; cursor: pointer;
+      color: var(--text); line-height: 1; padding: 0 4px;
+    }
+    .anim-modal-canvas { display: block; width: 100%; aspect-ratio: 16/7; }
+  </style>
 </head>
 <body>
 
@@ -87,6 +111,26 @@
     </table>
   </main>
 </div>
+
+<!-- Animation modal -->
+<div id="anim-modal-overlay" class="anim-modal-overlay">
+  <div class="anim-modal">
+    <div class="anim-modal-header">
+      <div>
+        <div class="anim-modal-trick" id="anim-modal-trick"></div>
+        <div class="anim-modal-meta"  id="anim-modal-meta"></div>
+      </div>
+      <button class="anim-modal-close" id="anim-modal-close">&times;</button>
+    </div>
+    <canvas class="anim-modal-canvas" id="anim-modal-canvas"></canvas>
+  </div>
+</div>
+
+<script type="module">
+import { startCanvasAnim, stopCanvasAnim } from '/static/dist/shared/phone-animation.js';
+window._animStart = startCanvasAnim;
+window._animStop  = stopCanvasAnim;
+</script>
 
 <script>
 const TOKEN_KEY = 'fp_game_token';
@@ -196,7 +240,7 @@ function renderTable(recs) {
   }
   tbody.innerHTML = recs.map(r => {
     const isRef = refByTrick[r.trick] === r.id;
-    return `<tr>
+    return `<tr class="rec-row" data-id="${esc(r.id)}">
       <td><strong>${esc(r.trick)}</strong></td>
       <td>${esc(r.collector || '—')}</td>
       <td>${fmtDur(r.duration_ms)}</td>
@@ -215,9 +259,11 @@ function renderTable(recs) {
   }).join('');
 
   tbody.querySelectorAll('.delete-btn').forEach(btn =>
-    btn.addEventListener('click', () => deleteRec(btn.dataset.id, btn)));
+    btn.addEventListener('click', e => { e.stopPropagation(); deleteRec(btn.dataset.id, btn); }));
   tbody.querySelectorAll('.ref-btn').forEach(btn =>
-    btn.addEventListener('click', () => toggleRef(btn)));
+    btn.addEventListener('click', e => { e.stopPropagation(); toggleRef(btn); }));
+  tbody.querySelectorAll('.rec-row').forEach(row =>
+    row.addEventListener('click', () => openAnimModal(row.dataset.id)));
 }
 
 async function loadRecordings() {
@@ -293,6 +339,46 @@ async function toggleRef(btn) {
 
 document.getElementById('trick-filter').addEventListener('change', applyFilter);
 document.getElementById('collector-filter').addEventListener('change', applyFilter);
+
+// ── Animation modal ───────────────────────────
+
+const overlay = document.getElementById('anim-modal-overlay');
+
+function closeAnimModal() {
+  overlay.classList.remove('open');
+  if (animRafId) { cancelAnimationFrame(animRafId); animRafId = null; }
+  animPlaying = false;
+  const canvas = document.getElementById('anim-modal-canvas');
+  if (window._animStop) window._animStop(canvas);
+}
+
+async function openAnimModal(id) {
+  closeAnimModal();
+  overlay.classList.add('open');
+  document.getElementById('anim-modal-trick').textContent = '…';
+  document.getElementById('anim-modal-meta').textContent  = '';
+
+  const r = await fetch(`/lab/api/recordings/${encodeURIComponent(id)}`, {
+    headers: authHeaders(),
+  }).catch(() => null);
+  if (!r || !r.ok) {
+    document.getElementById('anim-modal-trick').textContent = 'Failed to load';
+    return;
+  }
+  const rec = await r.json();
+
+  document.getElementById('anim-modal-trick').textContent = rec.trick;
+  const conf = rec.confidence != null ? ` · ${Math.round(rec.confidence * 100)}%` : '';
+  document.getElementById('anim-modal-meta').textContent =
+    `${(rec.duration_ms / 1000).toFixed(2)}s · ${rec.sample_count} samples · ${rec.collector || '—'}${conf}`;
+
+  const canvas = document.getElementById('anim-modal-canvas');
+  if (window._animStart) window._animStart(canvas, rec.samples);
+}
+
+document.getElementById('anim-modal-close').addEventListener('click', closeAnimModal);
+overlay.addEventListener('click', e => { if (e.target === overlay) closeAnimModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAnimModal(); });
 
 // ── Init ──────────────────────────────────────
 checkAuth();

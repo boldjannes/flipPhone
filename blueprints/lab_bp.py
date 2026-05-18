@@ -119,6 +119,35 @@ def list_recordings():
     return jsonify([dict(r) for r in rows])
 
 
+@lab.route('/api/recordings/<rec_id>', methods=['GET'])
+@require_lab
+def get_recording(rec_id):
+    db = get_db()
+    if g.game_user['role'] == 'admin':
+        row = db.execute(
+            '''SELECT r.*, COALESCE(k.name, u.username) AS collector
+               FROM recordings r
+               LEFT JOIN api_keys k ON r.key_id = k.id
+               LEFT JOIN game_users u ON r.user_id = u.id
+               WHERE r.id = ?''',
+            (rec_id,),
+        ).fetchone()
+    else:
+        row = db.execute(
+            '''SELECT r.*, COALESCE(k.name, u.username) AS collector
+               FROM recordings r
+               LEFT JOIN api_keys k ON r.key_id = k.id
+               LEFT JOIN game_users u ON r.user_id = u.id
+               WHERE r.id = ? AND r.user_id = ?''',
+            (rec_id, g.game_user['uid']),
+        ).fetchone()
+    if not row:
+        return jsonify({'error': 'Not found'}), 404
+    d = dict(row)
+    d['samples'] = json.loads(d['samples'])
+    return jsonify(d)
+
+
 @lab.route('/api/recordings/<rec_id>', methods=['DELETE'])
 @require_lab
 def delete_recording(rec_id):
