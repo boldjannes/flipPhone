@@ -343,6 +343,8 @@ document.getElementById('collector-filter').addEventListener('change', applyFilt
 // ── Animation modal ───────────────────────────
 
 const overlay = document.getElementById('anim-modal-overlay');
+let animRafId = null;
+let animPlaying = false;
 
 function closeAnimModal() {
   overlay.classList.remove('open');
