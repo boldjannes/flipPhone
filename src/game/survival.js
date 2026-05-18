@@ -161,7 +161,7 @@ function _renderPlay() {
 
   // Reference animation — always shown, placeholder when no ref
   const animWrap = _el("div", "gs-replay-canvas-wrap");
-  const ref = _refs[currentTrick.name];
+  const ref = _refs[currentTrick.id] ?? _refs[currentTrick.name];
   if (ref?.samples?.length > 1) {
     const canvas = document.createElement("canvas");
     canvas.className = "gs-replay-canvas";
