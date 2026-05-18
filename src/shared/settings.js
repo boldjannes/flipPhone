@@ -6,6 +6,7 @@ const DEFAULTS = {
   activation_post_ms:     1400,
   activation_cooldown_ms: 1800,
   confidence_threshold:   0.80,
+  training_threshold:     0.85,
 };
 
 let _cache = null;

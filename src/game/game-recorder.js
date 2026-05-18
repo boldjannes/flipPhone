@@ -52,6 +52,7 @@ export var normalizeTrick = function(raw) {
 export class GameRecorder {
   constructor(options = {}) {
     this.confidenceThreshold = options.confidenceThreshold ?? 0.8;
+    this.trainingThreshold   = options.trainingThreshold   ?? 0.85;
     this.cooldownMs = options.cooldownMs ?? 2000;
     this.onTrickDetected = options.onTrickDetected || null;
 
@@ -155,8 +156,7 @@ export class GameRecorder {
     // Normalize trick name from predict API ("Kickflip" → "kickflip")
     result.trick = normalizeTrick(result.trick);
 
-    // Auto-save recording for data collection only when confident enough
-    if (result.confidence >= 0.85) {
+    if (result.confidence >= this.trainingThreshold) {
       this._saveRecording(samples, result.trick);
     }
 
@@ -329,7 +329,7 @@ export class GameRecorder {
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const result = await resp.json();
             result.trick = normalizeTrick(result.trick);
-            if (result.confidence >= 0.85) this._saveRecording(samples, result.trick);
+            if (result.confidence >= this.confidenceThreshold) this._saveRecording(samples, result.trick);
             if (this.onTrickDetected) this.onTrickDetected({ ...result, samples });
           } catch (err) {
             if (this.onActivationError) this.onActivationError(err);

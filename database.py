@@ -206,6 +206,7 @@ def init_db():
         ('activation_post_ms',      '1400'),
         ('activation_cooldown_ms',  '1800'),
         ('confidence_threshold',    '0.80'),
+        ('training_threshold',      '0.85'),
     ]
     conn.executemany(
         'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',

@@ -369,6 +369,7 @@ _SETTING_KEYS = {
     'activation_post_ms',
     'activation_cooldown_ms',
     'confidence_threshold',
+    'training_threshold',
 }
 
 

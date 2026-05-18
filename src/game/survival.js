@@ -107,10 +107,14 @@ async function _startGame() {
   _st = { letters: 0, landed: 0, currentTrick: null };
 
   if (!_recorder) {
-    _recorder = new GameRecorder({ confidenceThreshold: _cfg.confidence_threshold ?? 0.80 });
+    _recorder = new GameRecorder({
+      confidenceThreshold: _cfg.confidence_threshold ?? 0.80,
+      trainingThreshold:   _cfg.training_threshold   ?? 0.85,
+    });
     await _recorder.initSensors().catch(() => {});
   } else {
     _recorder.confidenceThreshold = _cfg.confidence_threshold ?? 0.80;
+    _recorder.trainingThreshold   = _cfg.training_threshold   ?? 0.85;
   }
 
   _recorder.onTrickDetected   = _onTrickDetected;

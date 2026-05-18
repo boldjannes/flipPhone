@@ -195,10 +195,14 @@ export async function openGame(gameId) {
 
   // Init recorder
   if (!_gsRecorder) {
-    _gsRecorder = new GameRecorder({ confidenceThreshold: _gsCfg.confidence_threshold ?? 0.70 });
+    _gsRecorder = new GameRecorder({
+      confidenceThreshold: _gsCfg.confidence_threshold ?? 0.70,
+      trainingThreshold:   _gsCfg.training_threshold   ?? 0.85,
+    });
     await _gsRecorder.initSensors().catch(() => {});
   } else {
     _gsRecorder.confidenceThreshold = _gsCfg.confidence_threshold ?? 0.70;
+    _gsRecorder.trainingThreshold   = _gsCfg.training_threshold   ?? 0.85;
   }
 
   _gsRender();
