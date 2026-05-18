@@ -314,3 +314,50 @@ export function stopCanvasAnim(canvas) {
     _canvasAnims.delete(canvas);
   }
 }
+
+// Renders one full loop of the animation into an array of <canvas> elements.
+// Temporarily pauses the live rAF loop while capturing, then restores it.
+export function captureFrames(canvas, { fps = 10, scale = 0.5 } = {}) {
+  const st = _canvasAnims.get(canvas);
+  if (!st || !st.totalTime) return null;
+
+  if (st.rafId) { cancelAnimationFrame(st.rafId); st.rafId = null; }
+
+  const frameCount = Math.max(2, Math.round((st.totalTime / 1000) * fps));
+  const W = Math.max(1, Math.round(canvas.width  * scale));
+  const H = Math.max(1, Math.round(canvas.height * scale));
+  const frames = [];
+
+  for (let i = 0; i < frameCount; i++) {
+    const t = (i / frameCount) * st.totalTime;
+    _applyQ(st.model, getQAtTime(st.samples, st.orientations, t));
+    _updateShadow(st.shadow, st.model, getHeightAtTime(st.samples, st.heightFactors, t));
+    st.renderer.render(st.scene, st.camera);
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    tmp.getContext('2d').drawImage(canvas, 0, 0, W, H);
+    frames.push(tmp);
+  }
+
+  // Restore state and resume loop
+  _applyQ(st.model, getQAtTime(st.samples, st.orientations, st.currentTime));
+  _updateShadow(st.shadow, st.model, getHeightAtTime(st.samples, st.heightFactors, st.currentTime));
+  st.renderer.render(st.scene, st.camera);
+
+  function resume(now) {
+    if (!_canvasAnims.has(canvas)) return;
+    if (st.lastFrame !== null) {
+      st.currentTime += (now - st.lastFrame) * 0.6;
+      if (st.currentTime >= st.totalTime) st.currentTime = 0;
+    }
+    st.lastFrame = now;
+    _applyQ(st.model, getQAtTime(st.samples, st.orientations, st.currentTime));
+    _updateShadow(st.shadow, st.model, getHeightAtTime(st.samples, st.heightFactors, st.currentTime));
+    st.renderer.render(st.scene, st.camera);
+    st.rafId = requestAnimationFrame(resume);
+  }
+  st.lastFrame = null;
+  st.rafId = requestAnimationFrame(resume);
+
+  return { frames, delayMs: Math.round(1000 / fps) };
+}

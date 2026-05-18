@@ -353,11 +353,12 @@ def save_game_recording():
     try:
         db.execute(
             '''INSERT INTO recordings
-               (id, key_id, trick, timestamp, duration_ms,
+               (id, user_id, key_id, trick, timestamp, duration_ms,
                 sample_count, sample_rate_hz, samples, source, confidence, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (
                 rec_id,
+                me,
                 1,  # default key_id — game recordings attributed to system
                 trick,
                 now_iso(),

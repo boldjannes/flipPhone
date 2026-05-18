@@ -120,6 +120,7 @@
         <div class="anim-modal-trick" id="anim-modal-trick"></div>
         <div class="anim-modal-meta"  id="anim-modal-meta"></div>
       </div>
+      <button class="btn btn-sm" id="anim-modal-gif" style="font-size:12px">Download GIF</button>
       <button class="anim-modal-close" id="anim-modal-close">&times;</button>
     </div>
     <canvas class="anim-modal-canvas" id="anim-modal-canvas"></canvas>
@@ -127,6 +128,7 @@
 </div>
 
 <script type="module" src="/static/dist/admin-recordings-anim.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
 
 <script>
 const TOKEN_KEY = 'fp_game_token';
@@ -377,6 +379,33 @@ async function openAnimModal(id) {
 document.getElementById('anim-modal-close').addEventListener('click', closeAnimModal);
 overlay.addEventListener('click', e => { if (e.target === overlay) closeAnimModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAnimModal(); });
+
+document.getElementById('anim-modal-gif').addEventListener('click', () => {
+  const canvas = document.getElementById('anim-modal-canvas');
+  const btn    = document.getElementById('anim-modal-gif');
+  if (!window._animCapture || !window.GIF) return;
+  const result = window._animCapture(canvas, { fps: 12, scale: 0.5 });
+  if (!result || !result.frames.length) return;
+  btn.disabled = true;
+  btn.textContent = 'Encoding…';
+  const gif = new GIF({
+    workers: 2, quality: 8,
+    workerScript: 'https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js',
+    width:  result.frames[0].width,
+    height: result.frames[0].height,
+  });
+  result.frames.forEach(f => gif.addFrame(f, { delay: result.delayMs }));
+  gif.on('finished', blob => {
+    const trick = document.getElementById('anim-modal-trick').textContent || 'trick';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = trick.replace(/\s+/g, '_') + '.gif';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+    btn.disabled = false; btn.textContent = 'Download GIF';
+  });
+  gif.render();
+});
 
 // ── Init ──────────────────────────────────────
 checkAuth();
