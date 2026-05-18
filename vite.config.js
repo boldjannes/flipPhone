@@ -15,7 +15,8 @@ export default defineConfig({
         'lab-activation':   r('src/lab/activation.js'),
         'game':           r('src/game/index.js'),
         'admin-embed':    r('src/admin/embed.js'),
-        'admin-tricks':   r('src/admin/tricks.js'),
+        'admin-tricks':          r('src/admin/tricks.js'),
+        'admin-recordings-anim': r('src/admin/recordings-anim.js'),
       },
       output: {
         entryFileNames: '[name].js',
