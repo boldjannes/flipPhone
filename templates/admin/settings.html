@@ -246,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Settings ──────────────────────────────────────────────────────────
 async function loadSettings() {
-  const r = await fetch('/admin/api/settings', { headers: authHeaders() }).catch(() => null);
+  const r = await fetch('/admin/api/settings', { headers: authH() }).catch(() => null);
   if (!r || !r.ok) return;
   const s = await r.json();
   for (const [key, value] of Object.entries(s)) {
@@ -271,7 +271,7 @@ document.getElementById('settings-form').addEventListener('submit', async e => {
 
   const r = await fetch('/admin/api/settings', {
     method: 'PUT',
-    headers: authHeaders(),
+    headers: authH(),
     body: JSON.stringify(body),
   }).catch(() => null);
 
