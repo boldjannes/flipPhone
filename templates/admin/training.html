@@ -90,6 +90,16 @@
           </div>
         </div>
 
+        <div class="form-row" style="margin-top:16px">
+          <label for="train-min-confidence">Min. Confidence</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+            <input type="number" id="train-min-confidence" name="min_confidence"
+                   min="0" max="1" step="0.05" placeholder="none (include all)"
+                   style="width:180px">
+            <span style="font-size:12px;color:var(--dim)">recordings without confidence score always included</span>
+          </div>
+        </div>
+
         <div class="form-row" style="margin-top:24px">
           <button type="submit" class="btn" id="train-submit-btn">Start Training</button>
         </div>
@@ -280,6 +290,8 @@ document.getElementById('train-form').addEventListener('submit', async e => {
   const source_users = allUsers
     ? null
     : Array.from(document.querySelectorAll('.user-check:checked')).map(cb => parseInt(cb.value, 10));
+  const minConfVal = document.getElementById('train-min-confidence').value;
+  const min_confidence = minConfVal !== '' ? parseFloat(minConfVal) : null;
 
   if (!tricks.length)                    { alert('Select at least one trick.'); return; }
   if (!allUsers && !source_users.length) { alert('Select at least one user.');  return; }
@@ -290,7 +302,7 @@ document.getElementById('train-form').addEventListener('submit', async e => {
   const r = await fetch('/admin/api/train', {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify({ name, model_type, tricks, source_users }),
+    body: JSON.stringify({ name, model_type, tricks, source_users, min_confidence }),
   }).catch(() => null);
 
   if (!r || !r.ok) {

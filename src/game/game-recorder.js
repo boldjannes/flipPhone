@@ -157,7 +157,7 @@ export class GameRecorder {
     result.trick = normalizeTrick(result.trick);
 
     if (result.confidence >= this.trainingThreshold) {
-      this._saveRecording(samples, result.trick);
+      this._saveRecording(samples, result.trick, result.confidence);
     }
 
     if (this.onTrickDetected) {
@@ -170,7 +170,7 @@ export class GameRecorder {
   /**
    * Fire-and-forget: save recording to server for ML training data.
    */
-  _saveRecording(samples, trick) {
+  _saveRecording(samples, trick, confidence) {
     const token = typeof getToken === "function" ? getToken() : null;
     if (!token) return;
 
@@ -178,6 +178,7 @@ export class GameRecorder {
       trick,
       samples,
       source: "game",
+      ...(confidence != null ? { confidence } : {}),
     };
 
     fetch("/game/api/recordings", {
@@ -329,7 +330,7 @@ export class GameRecorder {
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const result = await resp.json();
             result.trick = normalizeTrick(result.trick);
-            if (result.confidence >= this.confidenceThreshold) this._saveRecording(samples, result.trick);
+            if (result.confidence >= this.trainingThreshold) this._saveRecording(samples, result.trick, result.confidence);
             if (this.onTrickDetected) this.onTrickDetected({ ...result, samples });
           } catch (err) {
             if (this.onActivationError) this.onActivationError(err);

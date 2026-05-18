@@ -99,7 +99,7 @@ def list_recordings():
     if g.game_user['role'] == 'admin':
         rows = db.execute(
             '''SELECT r.id, r.trick, r.duration_ms, r.sample_count, r.created_at,
-                      COALESCE(k.name, u.username) AS collector
+                      r.confidence, COALESCE(k.name, u.username) AS collector
                FROM recordings r
                LEFT JOIN api_keys k ON r.key_id = k.id
                LEFT JOIN game_users u ON r.user_id = u.id
@@ -108,7 +108,7 @@ def list_recordings():
     else:
         rows = db.execute(
             '''SELECT r.id, r.trick, r.duration_ms, r.sample_count, r.created_at,
-                      COALESCE(k.name, u.username) AS collector
+                      r.confidence, COALESCE(k.name, u.username) AS collector
                FROM recordings r
                LEFT JOIN api_keys k ON r.key_id = k.id
                LEFT JOIN game_users u ON r.user_id = u.id

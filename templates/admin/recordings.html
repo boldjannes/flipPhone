@@ -75,13 +75,14 @@
           <th>Collector</th>
           <th>Duration</th>
           <th>Samples</th>
+          <th>Confidence</th>
           <th>Date</th>
           <th>Ref</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="rec-tbody">
-        <tr><td colspan="7" class="table-msg">Loading…</td></tr>
+        <tr><td colspan="8" class="table-msg">Loading…</td></tr>
       </tbody>
     </table>
   </main>
@@ -180,10 +181,17 @@ function applyFilter() {
   document.getElementById('rec-count').textContent = `${recs.length} recording${recs.length !== 1 ? 's' : ''}`;
 }
 
+function fmtConf(c) {
+  if (c == null) return '<span style="color:var(--dim)">—</span>';
+  const pct = Math.round(c * 100);
+  const col = c >= 0.85 ? 'var(--text)' : c >= 0.70 ? '#b07000' : 'var(--danger)';
+  return `<span style="font-variant-numeric:tabular-nums;color:${col}">${pct}%</span>`;
+}
+
 function renderTable(recs) {
   const tbody = document.getElementById('rec-tbody');
   if (!recs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="table-msg">No recordings.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="table-msg">No recordings.</td></tr>';
     return;
   }
   tbody.innerHTML = recs.map(r => {
@@ -193,6 +201,7 @@ function renderTable(recs) {
       <td>${esc(r.collector || '—')}</td>
       <td>${fmtDur(r.duration_ms)}</td>
       <td>${r.sample_count}</td>
+      <td>${fmtConf(r.confidence)}</td>
       <td>${fmtDate(r.created_at)}</td>
       <td>
         <button class="btn btn-sm ref-btn" data-id="${esc(r.id)}" data-trick="${esc(r.trick)}" data-is-ref="${isRef ? 1 : 0}"

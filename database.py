@@ -182,6 +182,11 @@ def init_db():
             [(id_, name) for name, id_ in name_to_id.items() if name != id_],
         )
 
+    # Migration: add confidence column to recordings
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(recordings)").fetchall()}
+    if 'confidence' not in cols:
+        conn.execute("ALTER TABLE recordings ADD COLUMN confidence REAL")
+
     # Migration: survival_scores table
     conn.execute('''
         CREATE TABLE IF NOT EXISTS survival_scores (

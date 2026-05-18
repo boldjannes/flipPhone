@@ -325,7 +325,17 @@ def delete_trick(trick_id):
 # ──────────────────────────────────────────────
 # /admin/api/export
 # ──────────────────────────────────────────────
-def _get_export_rows(db):
+def _get_export_rows(db, min_confidence=None):
+    if min_confidence is not None:
+        return db.execute(
+            '''SELECT r.*, COALESCE(k.name, u.username) AS collector
+               FROM recordings r
+               LEFT JOIN api_keys k ON r.key_id = k.id
+               LEFT JOIN game_users u ON r.user_id = u.id
+               WHERE r.confidence IS NULL OR r.confidence >= ?
+               ORDER BY r.created_at DESC''',
+            (min_confidence,),
+        ).fetchall()
     return db.execute(
         '''SELECT r.*, COALESCE(k.name, u.username) AS collector
            FROM recordings r
@@ -338,7 +348,8 @@ def _get_export_rows(db):
 @admin.route('/api/export/json')
 @require_admin_or_key
 def export_json():
-    rows = _get_export_rows(get_db())
+    min_confidence = request.args.get('min_confidence', type=float)
+    rows = _get_export_rows(get_db(), min_confidence)
     if not rows:
         return jsonify({'error': 'No recordings to export'}), 404
 
@@ -414,7 +425,8 @@ def update_settings():
 @admin.route('/api/export/csv')
 @require_admin_or_key
 def export_csv():
-    rows = _get_export_rows(get_db())
+    min_confidence = request.args.get('min_confidence', type=float)
+    rows = _get_export_rows(get_db(), min_confidence)
     if not rows:
         return jsonify({'error': 'No recordings to export'}), 404
 

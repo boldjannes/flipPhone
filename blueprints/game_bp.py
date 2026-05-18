@@ -326,6 +326,12 @@ def save_game_recording():
     raw_trick = str(data.get('trick', ''))[:64]
     samples = data.get('samples')
     source = str(data.get('source', 'game'))[:32]
+    confidence = data.get('confidence')
+    if confidence is not None:
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
+            confidence = None
 
     if not raw_trick or not isinstance(samples, list) or len(samples) < 5:
         return jsonify({'error': 'trick and samples required'}), 400
@@ -348,8 +354,8 @@ def save_game_recording():
         db.execute(
             '''INSERT INTO recordings
                (id, key_id, trick, timestamp, duration_ms,
-                sample_count, sample_rate_hz, samples, source, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                sample_count, sample_rate_hz, samples, source, confidence, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (
                 rec_id,
                 1,  # default key_id — game recordings attributed to system
@@ -360,6 +366,7 @@ def save_game_recording():
                 sample_rate,
                 json.dumps(samples),
                 source,
+                confidence,
                 now_iso(),
             ),
         )
