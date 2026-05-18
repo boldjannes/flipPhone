@@ -271,6 +271,11 @@ export async function startCanvasAnim(canvas, samples) {
   stopCanvasAnim(canvas);
 
   const gltf = await _loadModel();
+
+  // Wait one frame so the browser has laid out the canvas before reading its dimensions.
+  await new Promise(r => requestAnimationFrame(r));
+  if (!canvas.isConnected) return;
+
   const { renderer, scene, camera } = _buildRenderer(canvas);
   const model = _cloneModel(gltf, scene);
   const shadow = _buildShadow(scene, model);

@@ -183,20 +183,17 @@
 
 <script>
 const TOKEN_KEY = 'fp_game_token';
-const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
-const authHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() });
-
-const loginEl  = document.getElementById('login');
-const appEl    = document.getElementById('app');
-const loginForm = document.getElementById('login-form');
-const loginErr = document.getElementById('login-error');
+function token() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function authH() { return { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() }; }
 
 function showLogin(err) {
-  loginEl.style.display = ''; appEl.style.display = 'none';
-  if (err) loginErr.textContent = err;
+  document.getElementById('login').style.display = 'flex';
+  document.getElementById('app').style.display   = 'none';
+  if (err) document.getElementById('login-error').textContent = err;
 }
 function showApp(username) {
-  loginEl.style.display = 'none'; appEl.style.display = '';
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display   = 'block';
   if (username) document.getElementById('logged-in-as').textContent = username;
   loadSettings();
 }
@@ -205,46 +202,47 @@ async function verifyAdmin(t) {
   return r && r.ok;
 }
 
-const saved = getToken();
-if (saved) {
-  verifyAdmin(saved).then(ok => {
-    if (ok) {
-      fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + saved } })
-        .then(r => r.ok ? r.json() : null)
-        .then(me => showApp(me?.username || ''));
+document.addEventListener('DOMContentLoaded', () => {
+  const t = token();
+  if (t) {
+    verifyAdmin(t).then(ok => {
+      if (ok) {
+        fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + t } })
+          .then(r => r.ok ? r.json() : null)
+          .then(me => showApp(me?.username || ''));
+      } else {
+        localStorage.removeItem(TOKEN_KEY);
+        showLogin();
+      }
+    });
+  } else {
+    showLogin();
+  }
+
+  document.getElementById('login-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    document.getElementById('login-error').textContent = '';
+    const fd = new FormData(e.target);
+    const r = await fetch('/game/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') }),
+    }).catch(() => null);
+    if (!r || !r.ok) { showLogin('Invalid credentials'); return; }
+    const data = await r.json();
+    localStorage.setItem(TOKEN_KEY, data.token);
+    if (await verifyAdmin(data.token)) {
+      showApp(data.user?.username || fd.get('username'));
     } else {
       localStorage.removeItem(TOKEN_KEY);
-      showLogin();
+      showLogin('Admin access required');
     }
   });
-} else {
-  showLogin();
-}
 
-loginForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  loginErr.textContent = '';
-  const u = document.getElementById('u').value.trim();
-  const p = document.getElementById('p').value;
-  const r = await fetch('/game/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: u, password: p }),
-  }).catch(() => null);
-  if (!r || !r.ok) { loginErr.textContent = 'Invalid credentials'; return; }
-  const data = await r.json();
-  localStorage.setItem(TOKEN_KEY, data.token);
-  if (await verifyAdmin(data.token)) {
-    showApp(data.user?.username || u);
-  } else {
+  document.getElementById('logout-btn').addEventListener('click', () => {
     localStorage.removeItem(TOKEN_KEY);
-    loginErr.textContent = 'Admin access required';
-  }
-});
-
-document.getElementById('logout-btn').addEventListener('click', () => {
-  localStorage.removeItem(TOKEN_KEY);
-  showLogin();
+    showLogin();
+  });
 });
 
 // ── Settings ──────────────────────────────────────────────────────────

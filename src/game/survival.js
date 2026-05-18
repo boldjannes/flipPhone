@@ -159,16 +159,20 @@ function _renderPlay() {
   c.appendChild(_el("div", "sv-prompt", "Lande diesen Trick:"));
   c.appendChild(_el("div", "sv-trick-name", currentTrick.name));
 
-  // Reference animation
+  // Reference animation — always shown, placeholder when no ref
+  const animWrap = _el("div", "gs-replay-canvas-wrap");
   const ref = _refs[currentTrick.name];
   if (ref?.samples?.length > 1) {
-    const wrap = _el("div", "gs-replay-canvas-wrap");
     const canvas = document.createElement("canvas");
     canvas.className = "gs-replay-canvas";
     canvas.id = "sv-canvas";
-    wrap.appendChild(canvas);
-    c.appendChild(wrap);
-    startCanvasAnim(canvas, ref.samples);
+    animWrap.appendChild(canvas);
+    c.appendChild(animWrap);
+    startCanvasAnim(canvas, ref.samples).catch(() => {});
+  } else {
+    animWrap.classList.add("sv-no-ref-wrap");
+    animWrap.appendChild(_el("div", "sv-no-ref", "Keine Referenz gesetzt"));
+    c.appendChild(animWrap);
   }
 
   // Sensor permission
