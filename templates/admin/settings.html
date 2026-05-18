@@ -182,35 +182,44 @@
 </div>
 
 <script>
-const TOKEN_KEY = 'fp_admin_token';
+const TOKEN_KEY = 'fp_game_token';
 const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
 const authHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() });
 
-// ── Auth boilerplate (same as other admin pages) ──────────────────────
 const loginEl  = document.getElementById('login');
 const appEl    = document.getElementById('app');
 const loginForm = document.getElementById('login-form');
 const loginErr = document.getElementById('login-error');
 
-async function tryAuth(token) {
-  try {
-    const r = await fetch('/admin/api/users', { headers: { Authorization: 'Bearer ' + token } });
-    if (r.ok) { showApp(token); return; }
-  } catch (_) {}
-  showLogin();
+function showLogin(err) {
+  loginEl.style.display = ''; appEl.style.display = 'none';
+  if (err) loginErr.textContent = err;
 }
-
-function showLogin() { loginEl.style.display = ''; appEl.style.display = 'none'; }
-function showApp(token) {
+function showApp(username) {
   loginEl.style.display = 'none'; appEl.style.display = '';
-  fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
-    .then(r => r.ok ? r.json() : null)
-    .then(me => { if (me) document.getElementById('logged-in-as').textContent = me.username; });
+  if (username) document.getElementById('logged-in-as').textContent = username;
   loadSettings();
+}
+async function verifyAdmin(t) {
+  const r = await fetch('/admin/api/users', { headers: { Authorization: 'Bearer ' + t } }).catch(() => null);
+  return r && r.ok;
 }
 
 const saved = getToken();
-if (saved) tryAuth(saved); else showLogin();
+if (saved) {
+  verifyAdmin(saved).then(ok => {
+    if (ok) {
+      fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + saved } })
+        .then(r => r.ok ? r.json() : null)
+        .then(me => showApp(me?.username || ''));
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      showLogin();
+    }
+  });
+} else {
+  showLogin();
+}
 
 loginForm.addEventListener('submit', async e => {
   e.preventDefault();
@@ -224,9 +233,13 @@ loginForm.addEventListener('submit', async e => {
   }).catch(() => null);
   if (!r || !r.ok) { loginErr.textContent = 'Invalid credentials'; return; }
   const data = await r.json();
-  if (data.role !== 'admin') { loginErr.textContent = 'Admin access required'; return; }
   localStorage.setItem(TOKEN_KEY, data.token);
-  showApp(data.token);
+  if (await verifyAdmin(data.token)) {
+    showApp(data.user?.username || u);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    loginErr.textContent = 'Admin access required';
+  }
 });
 
 document.getElementById('logout-btn').addEventListener('click', () => {
