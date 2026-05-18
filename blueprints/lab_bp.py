@@ -30,6 +30,11 @@ def playground():
     return render_template('lab/playground.html')
 
 
+@lab.route('/activation')
+def activation():
+    return render_template('lab/activation.html')
+
+
 # ──────────────────────────────────────────────
 # CORS preflight for /lab/api/*
 # ──────────────────────────────────────────────

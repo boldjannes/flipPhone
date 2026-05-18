@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff">
+  <title>Activation — Lab — flipPhone</title>
+  <style>
+    :root {
+      --bg:     #ffffff;
+      --text:   #111111;
+      --dim:    #888888;
+      --border: #111111;
+      --accent: #1a4fd6;
+      --danger: #cc0000;
+      --ok:     #16a34a;
+      --font:   'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box; margin: 0; padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100dvh;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex; align-items: center;
+      height: 48px; border-bottom: 1.5px solid var(--border);
+      padding: 0 16px; gap: 0;
+    }
+    .wordmark {
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none; color: var(--text);
+      padding-right: 16px; border-right: 1.5px solid var(--border); height: 100%;
+    }
+    .wordmark img { height: 22px; }
+    .wordmark-label { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+    .nav-links { display: flex; height: 100%; }
+    .nav-links a {
+      text-decoration: none; color: var(--dim);
+      font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+      padding: 0 14px; display: flex; align-items: center;
+      border-right: 1.5px solid var(--border);
+      text-transform: uppercase;
+    }
+    .nav-links a.active { color: var(--text); }
+    .nav-links a:active { background: #f0f0f0; }
+    .header-right { margin-left: auto; font-size: 12px; color: var(--dim); }
+
+    /* ── Layout ── */
+    .act-main {
+      max-width: 480px; margin: 0 auto;
+      padding: 20px 16px 60px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+
+    /* ── Permission banner ── */
+    .act-perm-banner {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 16px; border: 1.5px solid var(--border);
+      background: #f8f8f8; font-size: 13px;
+    }
+    .act-perm-banner.hidden { display: none; }
+    .act-perm-btn {
+      background: var(--text); color: var(--bg); border: none;
+      font-family: var(--font); font-size: 12px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 8px 14px; cursor: pointer; flex-shrink: 0;
+    }
+
+    /* ── Status badge ── */
+    .act-status-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    #act-status {
+      font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 4px 10px; border: 1.5px solid var(--border);
+    }
+    #act-status[data-phase="capturing"] { background: var(--danger); color: var(--bg); border-color: var(--danger); }
+    #act-status[data-phase="analyzing"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    #act-status[data-phase="cooldown"]  { color: var(--dim); }
+    .act-clear-btn {
+      background: none; border: 1.5px solid var(--border);
+      font-family: var(--font); font-size: 11px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 4px 10px; cursor: pointer; color: var(--dim);
+    }
+    .act-clear-btn:active { background: #f0f0f0; }
+
+    /* ── Magnitude meter ── */
+    .act-meter-section {
+      border: 1.5px solid var(--border); padding: 16px;
+    }
+    .act-meter-label {
+      font-size: 10px; color: var(--dim); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: baseline;
+    }
+    .act-meter-label span { font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+    .act-meter-track {
+      position: relative; height: 12px; background: #eeeeee; overflow: visible;
+    }
+    #act-meter-fill {
+      height: 100%; background: var(--text); width: 0%;
+      transition: width 0.08s linear;
+    }
+    #act-meter-marker {
+      position: absolute; top: -4px; bottom: -4px;
+      width: 2px; background: var(--danger);
+      left: 30%; /* updated by JS */
+    }
+    .act-meter-scale {
+      display: flex; justify-content: space-between;
+      font-size: 9px; color: var(--dim); margin-top: 4px;
+    }
+
+    /* ── Controls ── */
+    .act-controls {
+      border: 1.5px solid var(--border); padding: 16px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .act-controls-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--dim); margin-bottom: 2px;
+    }
+    .act-slider-row {
+      display: grid; grid-template-columns: 1fr auto;
+      align-items: center; gap: 8px;
+    }
+    .act-slider-label {
+      font-size: 11px; color: var(--dim); text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .act-slider-val {
+      font-size: 12px; font-weight: 700; min-width: 36px; text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    input[type=range] {
+      grid-column: 1 / -1; width: 100%;
+      accent-color: var(--text); height: 4px;
+    }
+
+    /* ── Results feed ── */
+    .act-feed-header {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--dim);
+    }
+    #act-feed { display: flex; flex-direction: column; gap: 10px; }
+
+    .act-card {
+      border: 1.5px solid var(--border); padding: 12px 14px;
+    }
+    .act-card-error {
+      border-color: var(--danger); color: var(--danger); font-size: 12px;
+    }
+    .act-card-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .act-card-trick {
+      font-size: 16px; font-weight: 700; letter-spacing: -0.3px;
+    }
+    .act-card-conf {
+      font-size: 18px; font-weight: 700;
+    }
+    .act-conf-high { color: var(--ok); }
+    .act-conf-mid  { color: #ca8a04; }
+    .act-conf-low  { color: var(--danger); }
+
+    .act-card-bars { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+    .act-bar-row {
+      display: grid; grid-template-columns: 110px 1fr 36px;
+      gap: 6px; align-items: center;
+    }
+    .act-bar-label { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .act-bar-label.act-bar-top { color: var(--text); font-weight: 700; }
+    .act-bar-track { background: #eeeeee; height: 5px; }
+    .act-bar-fill { background: #cccccc; height: 100%; }
+    .act-bar-fill.act-bar-fill-top { background: var(--accent); }
+    .act-bar-pct { font-size: 11px; color: var(--dim); text-align: right; }
+
+    .act-card-meta { font-size: 10px; color: var(--dim); }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: var(--text); color: var(--bg); padding: 9px 20px;
+      font-size: 13px; opacity: 0; transition: opacity 0.25s;
+      pointer-events: none; z-index: 100; white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <a class="wordmark" href="/lab/">
+    <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    <span class="wordmark-label">Lab</span>
+  </a>
+  <nav class="nav-links">
+    <a href="/lab/">Recordings</a>
+    <a href="/lab/record">Record</a>
+    <a href="/lab/playground">Playground</a>
+    <a href="/lab/activation" class="active">Activation</a>
+  </nav>
+  <div class="header-right" id="logged-in-as"></div>
+</header>
+
+<div class="act-main">
+
+  <div id="act-permission-banner" class="act-perm-banner hidden">
+    <span>Sensorzugriff erforderlich.</span>
+    <button id="act-request-perm-btn" class="act-perm-btn">Sensoren aktivieren</button>
+  </div>
+
+  <!-- Status + clear -->
+  <div class="act-status-row">
+    <span id="act-status" data-phase="idle">Initialisiere…</span>
+    <button id="act-clear-btn" class="act-clear-btn">Feed leeren</button>
+  </div>
+
+  <!-- Live magnitude meter -->
+  <div class="act-meter-section">
+    <div class="act-meter-label">
+      Beschleunigung (m/s²)
+      <span id="act-meter-val">0.0</span>
+    </div>
+    <div class="act-meter-track">
+      <div id="act-meter-fill"></div>
+      <div id="act-meter-marker"></div>
+    </div>
+    <div class="act-meter-scale">
+      <span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50+</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="act-controls">
+    <div class="act-controls-title">Einstellungen</div>
+
+    <div>
+      <div class="act-slider-row">
+        <span class="act-slider-label">Schwellwert</span>
+        <span class="act-slider-val"><span id="act-threshold-val">15</span> m/s²</span>
+      </div>
+      <input type="range" id="act-threshold" min="5" max="50" step="1" value="15">
+    </div>
+
+    <div>
+      <div class="act-slider-row">
+        <span class="act-slider-label">Pre-Buffer</span>
+        <span class="act-slider-val"><span id="act-prebuf-val">200</span> ms</span>
+      </div>
+      <input type="range" id="act-prebuf" min="0" max="500" step="50" value="200">
+    </div>
+
+    <div>
+      <div class="act-slider-row">
+        <span class="act-slider-label">Fenster nach Peak</span>
+        <span class="act-slider-val"><span id="act-postwin-val">1400</span> ms</span>
+      </div>
+      <input type="range" id="act-postwin" min="500" max="2500" step="100" value="1400">
+    </div>
+
+    <div>
+      <div class="act-slider-row">
+        <span class="act-slider-label">Cooldown</span>
+        <span class="act-slider-val"><span id="act-cooldown-val">2000</span> ms</span>
+      </div>
+      <input type="range" id="act-cooldown" min="500" max="5000" step="500" value="2000">
+    </div>
+  </div>
+
+  <!-- Results feed -->
+  <div class="act-feed-header">Erkannte Tricks</div>
+  <div id="act-feed"></div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+(async function checkAuth() {
+  const t = localStorage.getItem('fp_game_token');
+  if (!t) { window.location.replace('/lab/'); return; }
+  const r = await fetch('/game/api/auth/me', {
+    headers: { Authorization: 'Bearer ' + t },
+  }).catch(() => null);
+  if (!r || !r.ok) { window.location.replace('/lab/'); return; }
+  const me = await r.json();
+  if (me.role !== 'lab' && me.role !== 'admin') { window.location.replace('/lab/'); return; }
+  document.getElementById('logged-in-as').textContent = me.username;
+})();
+</script>
+<script type="module" src="/static/dist/lab-activation.js"></script>
+
+</body>
+</html>

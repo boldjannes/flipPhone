@@ -11,7 +11,8 @@ export default defineConfig({
       input: {
         'lab-recorder':   r('src/lab/recorder.js'),
         'lab-embed':      r('src/lab/embed.js'),
-        'lab-playground': r('src/lab/playground.js'),
+        'lab-playground':   r('src/lab/playground.js'),
+        'lab-activation':   r('src/lab/activation.js'),
         'game':           r('src/game/index.js'),
         'admin-embed':    r('src/admin/embed.js'),
         'admin-tricks':   r('src/admin/tricks.js'),
