@@ -113,8 +113,8 @@
     /* ── Record area ── */
     .record-area {
       max-width: 480px; margin: 0 auto;
-      padding: 28px 16px 0;
-      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      padding: 20px 16px 0;
+      display: flex; flex-direction: column; gap: 14px;
     }
     .selected-trick-label {
       font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
@@ -123,24 +123,34 @@
     .selected-trick {
       font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px;
     }
-    .timer {
-      font-size: 3.8rem; font-weight: 700; letter-spacing: -2px;
-      font-variant-numeric: tabular-nums; line-height: 1;
+    .act-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
     }
-    .timer.recording { color: var(--danger); }
-    .record-btn {
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; max-width: 320px; padding: 22px;
-      background: var(--text); color: var(--bg); border: none;
-      font-family: var(--font); font-size: 1.15rem; font-weight: 700;
-      letter-spacing: 0.06em; text-transform: uppercase;
-      cursor: pointer; user-select: none;
+    .act-phase-badge {
+      font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      padding: 4px 10px; border: 1.5px solid var(--border);
     }
-    .record-btn:active { background: #333; }
-    .record-btn.recording { background: var(--danger); }
-    .status-msg {
-      font-size: 12px; color: var(--dim); text-align: center; min-height: 16px;
+    .act-phase-badge[data-phase="capturing"] { background: var(--danger); color: var(--bg); border-color: var(--danger); }
+    .act-phase-badge[data-phase="cooldown"]  { color: var(--dim); }
+    .act-meter-section { border: 1.5px solid var(--border); padding: 12px 14px; }
+    .act-meter-label {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim);
+      margin-bottom: 6px;
     }
+    .act-meter-label span { font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+    .act-meter-track { position: relative; height: 10px; background: #eee; overflow: visible; }
+    #act-meter-fill { height: 100%; background: var(--text); width: 0%; transition: width 0.08s linear; }
+    #act-meter-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--danger); }
+    .act-meter-scale { display: flex; justify-content: space-between; font-size: 9px; color: var(--dim); margin-top: 3px; }
+    .act-slider-row {
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px;
+      margin-top: 10px;
+    }
+    .act-slider-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; }
+    .act-slider-val { font-size: 12px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+    input[type=range].act-range { grid-column: 1/-1; width: 100%; accent-color: var(--text); height: 4px; }
+    .status-msg { font-size: 12px; color: var(--dim); min-height: 16px; }
 
     /* ── Review overlay ── */
     .review-overlay {
@@ -242,14 +252,34 @@
 </div>
 
 <div class="record-area">
-  <div class="selected-trick-label">Selected trick</div>
-  <div class="selected-trick" id="selected-trick">—</div>
-  <div class="timer" id="timer-display">0:00.0</div>
-  <button class="record-btn" id="record-btn">
-    <span class="btn-icon">⏺</span>
-    <span class="btn-label">Record</span>
-  </button>
-  <p class="status-msg" id="status-msg">Initializing sensors…</p>
+  <div class="act-row">
+    <div>
+      <div class="selected-trick-label">Ausgewählter Trick</div>
+      <div class="selected-trick" id="selected-trick">—</div>
+    </div>
+    <span class="act-phase-badge" id="act-phase-badge" data-phase="idle">Listening…</span>
+  </div>
+
+  <div class="act-meter-section">
+    <div class="act-meter-label">
+      Beschleunigung (m/s²)
+      <span id="act-meter-val">0.0</span>
+    </div>
+    <div class="act-meter-track">
+      <div id="act-meter-fill"></div>
+      <div id="act-meter-marker"></div>
+    </div>
+    <div class="act-meter-scale">
+      <span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50+</span>
+    </div>
+    <div class="act-slider-row">
+      <span class="act-slider-label">Schwellwert</span>
+      <span class="act-slider-val"><span id="act-threshold-val">15</span> m/s²</span>
+      <input type="range" class="act-range" id="act-threshold" min="5" max="50" step="1" value="15">
+    </div>
+  </div>
+
+  <p class="status-msg" id="status-msg">Sensoren initialisieren…</p>
 </div>
 
 <!-- Review overlay -->

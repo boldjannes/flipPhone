@@ -1,6 +1,7 @@
 "use strict";
 
 import { computeOrientations, getQAtTime, computeHeightFactors, getHeightAtTime, createPhoneScene, startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
+import { SensorKit } from "../shared/sensor.js";
 
 // ─── State ─────────────────────────────────────
 export let TRICKS = [];
@@ -8,13 +9,10 @@ export let references = {};
 export let recordingCounts = {};
 
 export const state = {
-  selectedTrick: null,
-  isRecording: false,
-  samples: [],
-  recordingStart: null,
-  timerInterval: null,
-  sensorReady: false,
+  selectedTrick:    null,
+  sensorReady:      false,
   pendingRecording: null,
+  activationThreshold: 15,
 };
 
 // ─── DOM ───────────────────────────────────────
@@ -61,160 +59,86 @@ export function buildTrickGrid() {
 }
 
 export function selectTrick(trick) {
-  if (state.isRecording) return;
   state.selectedTrick = trick;
   window._selectedTrick = trick;
   $('selected-trick').textContent = trick;
   document.querySelectorAll('.trick-btn').forEach(b =>
     b.classList.toggle('selected', b.dataset.trick === trick));
   showRefAnimation(trick);
+  if (state.sensorReady) _startActivation();
 }
 
-// ─── Sensor ────────────────────────────────────
-export let latestAcc = { x: 0, y: 0, z: 0 };
-export let latestGyr = { x: 0, y: 0, z: 0 };
-
-export function onMotion(e) {
-  const acc = e.accelerationIncludingGravity || e.acceleration || {};
-  const gyr = e.rotationRate || {};
-  latestAcc = { x: acc.x ?? 0, y: acc.y ?? 0, z: acc.z ?? 0 };
-  latestGyr = {
-    x: ((gyr.alpha ?? 0) * Math.PI) / 180,
-    y: ((gyr.beta  ?? 0) * Math.PI) / 180,
-    z: ((gyr.gamma ?? 0) * Math.PI) / 180,
-  };
-  if (state.isRecording) {
-    const t = Date.now() - state.recordingStart;
-    state.samples.push({
-      t,
-      ax: +latestAcc.x.toFixed(4), ay: +latestAcc.y.toFixed(4), az: +latestAcc.z.toFixed(4),
-      gx: +latestGyr.x.toFixed(4), gy: +latestGyr.y.toFixed(4), gz: +latestGyr.z.toFixed(4),
-    });
-  }
-}
-
-export function attachMotionListener() {
-  let gotData = false;
-  let timeout = null;
-  function wrapped(e) {
-    const acc = e.accelerationIncludingGravity || e.acceleration || {};
-    if (!gotData && (acc.x || acc.y || acc.z)) {
-      gotData = true;
-      clearTimeout(timeout);
+// ─── Sensor + Activation ───────────────────────
+export function initSensors() {
+  SensorKit.init({
+    onReady: () => {
       state.sensorReady = true;
-      $('status-msg').textContent = 'Sensor active – select a trick and record!';
-    }
-    onMotion(e);
-  }
-  window.addEventListener('devicemotion', wrapped);
-  $('perm-banner').classList.add('hidden');
-  timeout = setTimeout(() => {
-    if (!gotData) {
-      $('status-msg').textContent = window.location.protocol === 'http:' &&
-        window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-        ? 'Sensors require HTTPS!'
-        : 'Sensors not responding. Try shaking the device.';
-    }
-  }, 1500);
-  state.sensorReady = true;
+      $('perm-banner').classList.add('hidden');
+      _setStatus('Trick wählen und Handy werfen!');
+      if (state.selectedTrick) _startActivation();
+    },
+    onPermissionNeeded: () => {
+      $('perm-banner').classList.remove('hidden');
+      _setStatus('"Sensoren aktivieren" tippen.');
+    },
+    onError: (reason) => {
+      _setStatus(reason);
+      $('sensor-hint').classList.remove('hidden');
+    },
+  });
 }
 
 export async function requestPermission() {
-  if (typeof DeviceMotionEvent !== 'undefined' &&
-      typeof DeviceMotionEvent.requestPermission === 'function') {
-    try {
-      if (await DeviceMotionEvent.requestPermission() === 'granted') {
-        attachMotionListener();
-      } else {
-        showToast('Permission denied.');
-      }
-    } catch (e) { showToast('Permission error: ' + e.message); }
-  } else {
-    attachMotionListener();
+  try {
+    await SensorKit.requestPermission();
+    state.sensorReady = true;
+    $('perm-banner').classList.add('hidden');
+    _setStatus('Trick wählen und Handy werfen!');
+    if (state.selectedTrick) _startActivation();
+  } catch (e) {
+    showToast('Permission denied.');
   }
 }
 
-export function initSensors() {
-  if (typeof DeviceMotionEvent === 'undefined') {
-    $('status-msg').textContent = 'No motion sensors on this device.';
-    $('sensor-hint').classList.remove('hidden');
-    return;
-  }
-  if (typeof DeviceMotionEvent.requestPermission === 'function') {
-    let granted = false;
-    function probe(e) {
-      const acc = e.accelerationIncludingGravity || e.acceleration || {};
-      if (acc.x || acc.y || acc.z) {
-        granted = true;
-        window.removeEventListener('devicemotion', probe);
-        attachMotionListener();
-      }
-    }
-    window.addEventListener('devicemotion', probe);
-    setTimeout(() => {
-      if (!granted) {
-        window.removeEventListener('devicemotion', probe);
-        $('perm-banner').classList.remove('hidden');
-        $('status-msg').textContent = 'Tap "Enable Sensors" to start.';
-      }
-    }, 1000);
-  } else {
-    attachMotionListener();
-  }
+function _startActivation() {
+  SensorKit.activate(
+    { threshold: state.activationThreshold, preBufMs: 200, postMs: 1400, cooldownMs: 1800 },
+    {
+      onCapture: (samples) => {
+        if (!state.selectedTrick) return;
+        const now = Date.now();
+        const durationMs = samples[samples.length - 1].t;
+        const sampleRateHz = Math.round((samples.length / durationMs) * 1000);
+        state.pendingRecording = {
+          id:          crypto.randomUUID ? crypto.randomUUID() : now.toString(36),
+          trick:       state.selectedTrick,
+          timestamp:   new Date(now - durationMs).toISOString(),
+          durationMs:  Math.round(durationMs),
+          sampleCount: samples.length,
+          sampleRateHz,
+          samples,
+        };
+        openReview(state.pendingRecording);
+      },
+      onPhase: (phase) => {
+        const labels = { idle: 'Listening…', capturing: 'Aufnahme!', cooldown: 'Cooldown…' };
+        _setStatus(labels[phase] ?? phase);
+        const badge = $('act-phase-badge');
+        if (badge) { badge.textContent = labels[phase] ?? phase; badge.dataset.phase = phase; }
+      },
+      onMag: (mag) => {
+        const fill = $('act-meter-fill');
+        const val  = $('act-meter-val');
+        if (fill) fill.style.width = Math.min((mag / 50) * 100, 100) + '%';
+        if (val)  val.textContent  = mag.toFixed(1);
+      },
+    },
+  );
 }
 
-// ─── Recording ─────────────────────────────────
-export function startRecording() {
-  if (!state.selectedTrick) { showToast('Select a trick first!'); return; }
-  if (!state.sensorReady)   { showToast('Enable sensors first!'); return; }
-  state.isRecording = true;
-  state.samples = [];
-  state.recordingStart = Date.now();
-  const btn = $('record-btn');
-  btn.classList.add('recording');
-  btn.querySelector('.btn-label').textContent = 'Stop';
-  btn.querySelector('.btn-icon').textContent = '⏹';
-  $('timer-display').classList.add('recording');
-  $('status-msg').textContent = 'Recording…';
-  state.timerInterval = setInterval(updateTimer, 100);
-}
-
-export function stopRecording() {
-  state.isRecording = false;
-  clearInterval(state.timerInterval);
-  const durationMs = Date.now() - state.recordingStart;
-  const btn = $('record-btn');
-  btn.classList.remove('recording');
-  btn.querySelector('.btn-label').textContent = 'Record';
-  btn.querySelector('.btn-icon').textContent = '⏺';
-  $('timer-display').classList.remove('recording');
-  $('timer-display').textContent = '0:00.0';
-
-  if (state.samples.length < 5) {
-    showToast('Too few samples – try again!');
-    $('status-msg').textContent = 'Ready – select a trick and record!';
-    return;
-  }
-
-  const sampleRateHz = Math.round((state.samples.length / durationMs) * 1000);
-  state.pendingRecording = {
-    id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36),
-    trick: state.selectedTrick,
-    timestamp: new Date(state.recordingStart).toISOString(),
-    durationMs: Math.round(durationMs),
-    sampleCount: state.samples.length,
-    sampleRateHz,
-    samples: state.samples.slice(),
-  };
-  openReview(state.pendingRecording);
-}
-
-export function updateTimer() {
-  const e = Date.now() - state.recordingStart;
-  const t = Math.floor((e % 1000) / 100);
-  const s = Math.floor(e / 1000) % 60;
-  const m = Math.floor(e / 60000);
-  $('timer-display').textContent = `${m}:${String(s).padStart(2,'0')}.${t}`;
+function _setStatus(msg) {
+  const el = $('status-msg');
+  if (el) el.textContent = msg;
 }
 
 // ─── 3D Animation ──────────────────────────────
@@ -369,12 +293,28 @@ export async function init() {
   showRefAnimation(state.selectedTrick);
   initSensors();
 
-  $('record-btn').addEventListener('click', () =>
-    state.isRecording ? stopRecording() : startRecording());
+  // Threshold slider
+  const slider = $('act-threshold');
+  const sliderVal = $('act-threshold-val');
+  if (slider) {
+    slider.value = state.activationThreshold;
+    if (sliderVal) sliderVal.textContent = state.activationThreshold;
+    slider.addEventListener('input', () => {
+      state.activationThreshold = +slider.value;
+      if (sliderVal) sliderVal.textContent = slider.value;
+      const marker = $('act-meter-marker');
+      if (marker) marker.style.left = Math.min((+slider.value / 50) * 100, 100) + '%';
+      if (state.sensorReady && state.selectedTrick) _startActivation();
+    });
+    // Initial marker
+    const marker = $('act-meter-marker');
+    if (marker) marker.style.left = Math.min((state.activationThreshold / 50) * 100, 100) + '%';
+  }
+
   $('perm-btn').addEventListener('click', requestPermission);
   $('btn-save').addEventListener('click', saveRecording);
   $('btn-discard').addEventListener('click', () => {
-    showToast('Recording discarded.');
+    showToast('Recording verworfen.');
     closeReview();
   });
 }

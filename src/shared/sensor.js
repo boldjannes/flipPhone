@@ -52,6 +52,13 @@ export const SensorKit = (() => {
         gz: +latestGyr.z.toFixed(4),
       });
     }
+
+    if (activating) {
+      _activationStep(
+        +latestAcc.x.toFixed(4), +latestAcc.y.toFixed(4), +latestAcc.z.toFixed(4),
+        +latestGyr.x.toFixed(4), +latestGyr.y.toFixed(4), +latestGyr.z.toFixed(4),
+      );
+    }
   }
 
   function attachListener() {
@@ -157,14 +164,95 @@ export const SensorKit = (() => {
     return result;
   }
 
+  // ── Activation (auto-trigger) ──────────────────
+  let activating    = false;
+  let activatePhase = 'idle'; // idle | capturing | cooldown
+  let rollingBuf    = [];     // {_abs, ax, ay, az, gx, gy, gz}
+  let captureArr    = [];
+  let activateCfg   = {};
+  let activateCbs   = {};
+  let _postTimer    = null;
+  let _coolTimer    = null;
+
+  function _activationStep(ax, ay, az, gx, gy, gz) {
+    const abs = Date.now();
+    const s   = { _abs: abs, ax, ay, az, gx, gy, gz };
+
+    rollingBuf.push(s);
+    const cutoff = abs - (activateCfg.preBufMs ?? 200) - 150;
+    while (rollingBuf.length && rollingBuf[0]._abs < cutoff) rollingBuf.shift();
+
+    if (activatePhase === 'capturing') captureArr.push(s);
+
+    const mag = Math.sqrt(ax * ax + ay * ay + az * az);
+    if (activateCbs.onMag) activateCbs.onMag(mag);
+
+    if (activatePhase === 'idle' && mag > (activateCfg.threshold ?? 15)) {
+      _activateTrigger(abs);
+    }
+  }
+
+  function _activateTrigger(abs) {
+    activatePhase = 'capturing';
+    if (activateCbs.onPhase) activateCbs.onPhase('capturing');
+
+    const cutoff = abs - (activateCfg.preBufMs ?? 200);
+    captureArr = rollingBuf.filter(s => s._abs >= cutoff).slice();
+
+    clearTimeout(_postTimer);
+    _postTimer = setTimeout(() => {
+      const raw = captureArr.slice();
+      captureArr = [];
+      activatePhase = 'cooldown';
+      if (activateCbs.onPhase) activateCbs.onPhase('cooldown');
+
+      if (raw.length >= 5) {
+        const t0      = raw[0]._abs;
+        const result  = raw.map(({ _abs, ...s }) => ({ ...s, t: _abs - t0 }));
+        if (activateCbs.onCapture) activateCbs.onCapture(result);
+      }
+
+      clearTimeout(_coolTimer);
+      _coolTimer = setTimeout(() => {
+        if (!activating) return;
+        activatePhase = 'idle';
+        if (activateCbs.onPhase) activateCbs.onPhase('idle');
+      }, activateCfg.cooldownMs ?? 2000);
+    }, activateCfg.postMs ?? 1400);
+  }
+
+  function activate(cfg = {}, cbs = {}) {
+    activating    = true;
+    activatePhase = 'idle';
+    activateCfg   = cfg;
+    activateCbs   = cbs;
+    rollingBuf    = [];
+    captureArr    = [];
+    clearTimeout(_postTimer);
+    clearTimeout(_coolTimer);
+    if (cbs.onPhase) cbs.onPhase('idle');
+  }
+
+  function deactivate() {
+    activating    = false;
+    activatePhase = 'idle';
+    clearTimeout(_postTimer);
+    clearTimeout(_coolTimer);
+    rollingBuf  = [];
+    captureArr  = [];
+    activateCbs = {};
+  }
+
   return {
     init,
     requestPermission,
     startRecording,
     stopRecording,
+    activate,
+    deactivate,
     getSamples: () => samples.slice(),
-    isReady: () => ready,
+    isReady:    () => ready,
     isRecording: () => recording,
-    latest: () => ({ acc: { ...latestAcc }, gyr: { ...latestGyr } }),
+    latest:     () => ({ acc: { ...latestAcc }, gyr: { ...latestGyr } }),
   };
 })();

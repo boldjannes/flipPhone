@@ -208,7 +208,7 @@ export function _gsStopAnims() {
 
 export function closeGame() {
   _gsStopAnims();
-  if (_gsRecorder) _gsRecorder.abort();
+  if (_gsRecorder) { _gsRecorder.stopActivation(); _gsRecorder.abort(); }
   if (_gsWaitTimer) { clearInterval(_gsWaitTimer); _gsWaitTimer = null; }
   _gsGameId = null;
   _gsGame = null;
@@ -292,19 +292,28 @@ export function _gsRenderSetter(game) {
   status.id = "gs-status";
   c.appendChild(status);
 
-  const recordBtn = _gs("button", "gs-record-btn");
-  recordBtn.id = "gs-record-btn";
-  recordBtn.textContent = "Trick aufnehmen";
-  recordBtn.addEventListener("click", () => _gsSetterToggleRecord());
-
+  // Activation status row in footer
   const footerFrag = document.createDocumentFragment();
-  footerFrag.appendChild(recordBtn);
+  const actRow = _gs("div", "gs-act-row");
+  const actBadge = _gs("span", "gs-act-badge", "Listening…");
+  actBadge.id = "gs-act-badge";
+  actBadge.dataset.phase = "idle";
+  actRow.appendChild(actBadge);
+  const actMeter = _gs("div", "gs-act-meter");
+  const actFill  = _gs("div", "gs-act-meter-fill");
+  actFill.id = "gs-act-meter-fill";
+  actMeter.appendChild(actFill);
+  actRow.appendChild(actMeter);
+  footerFrag.appendChild(actRow);
 
   if (_gsLine.length >= 1) {
     const submitBtn = _gs("button", "gs-submit-btn accent-btn");
     submitBtn.id = "gs-submit-line-btn";
     submitBtn.textContent = "Line absenden";
-    submitBtn.addEventListener("click", () => _gsSetterSubmit());
+    submitBtn.addEventListener("click", () => {
+      _gsRecorder.stopActivation();
+      _gsSetterSubmit();
+    });
     footerFrag.appendChild(submitBtn);
   }
 
@@ -314,134 +323,41 @@ export function _gsRenderSetter(game) {
     footerEl.appendChild(footerFrag);
     footerEl.classList.add("active");
   }
+
+  // Start activation
+  _gsRecorder.onTrickDetected   = _gsSetterOnTrick;
+  _gsRecorder.onActivationPhase = _gsOnPhase;
+  _gsRecorder.onActivationMag   = _gsOnMag;
+  _gsRecorder.startActivation({ threshold: 15, preBufMs: 200, postMs: 1400, cooldownMs: 1800 });
 }
 
-export async function _gsSetterToggleRecord() {
-  const btn = document.getElementById("gs-record-btn");
-  const status = document.getElementById("gs-status");
-  if (!btn) return;
+// ── Shared activation UI callbacks ────────────────
+export function _gsOnPhase(phase) {
+  const badge = document.getElementById("gs-act-badge");
+  if (!badge) return;
+  const labels = { idle: "Listening…", capturing: "Aufnahme!", cooldown: "Cooldown…" };
+  badge.textContent   = labels[phase] ?? phase;
+  badge.dataset.phase = phase;
+}
 
-  if (!_gsRecording) {
-    // Start
-    try {
-      _gsRecorder.startRecording();
-      _gsRecording = true;
-      btn.textContent = "Stoppen & Erkennen";
-      btn.classList.add("gs-btn-recording");
-      if (status) status.textContent = "Aufnahme l\u00e4uft \u2013 mach deinen Trick!";
-    } catch (err) {
-      if (status) status.textContent = err.message;
+export function _gsOnMag(mag) {
+  const fill = document.getElementById("gs-act-meter-fill");
+  if (fill) fill.style.width = Math.min((mag / 50) * 100, 100) + "%";
+}
+
+export function _gsSetterOnTrick(result) {
+  const status = document.getElementById("gs-status");
+  if (result.confidence >= _gsRecorder.confidenceThreshold) {
+    _gsRecorder.stopActivation();
+    _gsLine.push({ trick: result.trick, samples: result.samples });
+    if (_gsLine.length >= 3) {
+      _gsShowReplay(result.samples, result.trick, "setter-done");
+    } else {
+      _gsShowReplay(result.samples, result.trick, "setter-next");
     }
   } else {
-    // Stop & predict
-    _gsRecording = false;
-    btn.textContent = "Auswerten...";
-    btn.disabled = true;
-    if (status) status.textContent = "Analysiere...";
-
-    try {
-      const result = await _gsRecorder.stopAndPredict();
-
-      if (result.confidence >= _gsRecorder.confidenceThreshold) {
-        _gsLine.push({ trick: result.trick, samples: result.samples });
-
-        if (_gsLine.length >= 3) {
-          _gsShowReplay(result.samples, result.trick, "setter-done");
-          return;
-        }
-
-        _gsShowReplay(result.samples, result.trick, "setter-next");
-      } else {
-        _gsShowDetectFlash(result.trick, result.confidence, false);
-        if (status) status.textContent = "Nicht erkannt – nochmal versuchen!";
-        setTimeout(() => {
-          btn.textContent = "Trick aufnehmen";
-          btn.disabled = false;
-          btn.classList.remove("gs-btn-recording");
-        }, 700);
-      }
-    } catch (err) {
-      if (status) status.textContent = "Fehler: " + err.message;
-      btn.textContent = "Trick aufnehmen";
-      btn.disabled = false;
-      btn.classList.remove("gs-btn-recording");
-    }
-  }
-}
-
-// ──────────────────────────────────────────────
-// Trick replay screen (looping, no controls)
-// ──────────────────────────────────────────────
-export function _gsShowReplay(samples, trick, mode) {
-  // mode: "setter-next" | "setter-done" | "matcher-next" | "matcher-done"
-  _gsStopAnims();
-  const c = GS.content();
-  c.innerHTML = "";
-  _gsClearFooter();
-
-  const name = trick.replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
-
-  const wrap = _gs("div", "gs-replay-wrap");
-
-  wrap.appendChild(_gs("div", "gs-replay-chip", "Deine Aufnahme"));
-  wrap.appendChild(_gs("div", "gs-replay-name", name));
-
-  const canvasWrap = _gs("div", "gs-replay-canvas-wrap");
-  const canvas = _gs("canvas", "gs-replay-canvas");
-  canvas.id = "gs-replay-canvas";
-  canvasWrap.appendChild(canvas);
-  wrap.appendChild(canvasWrap);
-
-  const btnLabel = mode === "setter-done" ? "Line absenden" : "Weiter";
-  const btn = _gs("button", "gs-submit-btn accent-btn", btnLabel);
-  btn.addEventListener("click", () => {
-    stopCanvasAnim(canvas);
-    if (mode === "setter-done") {
-      _gsSetterSubmit();
-    } else {
-      _gsRenderSetter(_gsGame);
-    }
-  });
-  wrap.appendChild(btn);
-
-  c.appendChild(wrap);
-  startCanvasAnim(canvas, samples);
-}
-
-export async function _gsSetterSubmit() {
-  if (_gsSubmitting || _gsLine.length === 0) return;
-  _gsSubmitting = true;
-
-  const btn = document.getElementById("gs-submit-line-btn");
-  const status = document.getElementById("gs-status");
-  if (btn) { btn.disabled = true; btn.textContent = "Sende..."; }
-  if (status) status.textContent = "Line wird gesendet...";
-
-  try {
-    const token = getToken();
-    const resp = await fetch(`/game/api/games/${_gsGameId}/set-line`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        tricks: _gsLine.map(e => e.trick),
-        samples_per_trick: _gsLine.map(e => e.samples),
-      }),
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error || "Fehler");
-    }
-    _gsGame = await resp.json();
-    _gsLine = [];
-    _gsSubmitting = false;
-    _gsRender(); // → waiting screen
-  } catch (err) {
-    if (status) status.textContent = "Fehler: " + err.message;
-    if (btn) { btn.disabled = false; btn.textContent = "Line absenden"; }
-    _gsSubmitting = false;
+    _gsShowDetectFlash(result.trick, result.confidence, false);
+    if (status) status.textContent = "Nicht erkannt – nochmal versuchen!";
   }
 }
 
@@ -508,18 +424,30 @@ export function _gsRenderMatcher(game) {
   status.id = "gs-status";
   c.appendChild(status);
 
-  // Record button
-  const recordBtn = _gs("button", "gs-record-btn");
-  recordBtn.id = "gs-record-btn";
-  recordBtn.textContent = "Trick aufnehmen";
-  recordBtn.addEventListener("click", () => _gsMatcherToggleRecord());
+  // Activation footer
+  const actRow   = _gs("div", "gs-act-row");
+  const actBadge = _gs("span", "gs-act-badge", "Listening…");
+  actBadge.id = "gs-act-badge";
+  actBadge.dataset.phase = "idle";
+  actRow.appendChild(actBadge);
+  const actMeter = _gs("div", "gs-act-meter");
+  const actFill  = _gs("div", "gs-act-meter-fill");
+  actFill.id = "gs-act-meter-fill";
+  actMeter.appendChild(actFill);
+  actRow.appendChild(actMeter);
 
   const footerEl = GS.footer();
   if (footerEl) {
     footerEl.innerHTML = "";
-    footerEl.appendChild(recordBtn);
+    footerEl.appendChild(actRow);
     footerEl.classList.add("active");
   }
+
+  // Start activation
+  _gsRecorder.onTrickDetected   = _gsMatcherOnTrick;
+  _gsRecorder.onActivationPhase = _gsOnPhase;
+  _gsRecorder.onActivationMag   = _gsOnMag;
+  _gsRecorder.startActivation({ threshold: 15, preBufMs: 200, postMs: 1400, cooldownMs: 1800 });
 }
 
 export function _gsTrickRef(trickId, samples) {
@@ -548,79 +476,42 @@ export function _gsStartRefAnim(samples) {
   if (canvas) startCanvasAnim(canvas, samples);
 }
 
-export async function _gsMatcherToggleRecord() {
+export function _gsMatcherOnTrick(result) {
+  if (_gsMatchFailed) return;
   const game = _gsGame;
   const line = game.current_line || [];
-  const btn = document.getElementById("gs-record-btn");
-  const status = document.getElementById("gs-status");
-  if (!btn || _gsMatchFailed) return;
+  const required   = line[_gsMatchIndex];
+  const detectedId = normalizeTrick(result.trick);
+  const requiredId = normalizeTrick(required);
+  const matched    = detectedId === requiredId && result.confidence >= _gsRecorder.confidenceThreshold;
 
-  if (!_gsRecording) {
-    try {
-      _gsRecorder.startRecording();
-      _gsRecording = true;
-      btn.textContent = "Stoppen & Pr\u00fcfen";
-      btn.classList.add("gs-btn-recording");
-      if (status) status.textContent = `Aufnahme \u2013 mach: ${line[_gsMatchIndex].replace(/_/g, " ")}`;
-    } catch (err) {
-      if (status) status.textContent = err.message;
+  if (matched) {
+    _gsMatchIndex++;
+    _gsUpdateMatchPills(line);
+    _gsShowDetectFlash(result.trick, result.confidence, true);
+    if (_gsMatchIndex >= line.length) {
+      _gsRecorder.stopActivation();
+      setTimeout(() => _gsMatcherSubmit(true), 800);
+      return;
     }
-  } else {
-    _gsRecording = false;
-    btn.textContent = "Auswerten...";
-    btn.disabled = true;
-    if (status) status.textContent = "Analysiere...";
-
-    try {
-      const result = await _gsRecorder.stopAndPredict();
-      const required = line[_gsMatchIndex];
-      // Normalize both sides: predict API may return display name ("Kickflip"),
-      // DB stores id ("kickflip"). normalizeTrick resolves both to id.
-      const detectedId = normalizeTrick(result.trick);
-      const requiredId = normalizeTrick(required);
-      const matched =
-        detectedId === requiredId &&
-        result.confidence >= _gsRecorder.confidenceThreshold;
-
-      if (matched) {
-        _gsMatchIndex++;
-        _gsUpdateMatchPills(line);
-        _gsShowDetectFlash(result.trick, result.confidence, true);
-
-        if (_gsMatchIndex >= line.length) {
-          btn.remove();
-          setTimeout(() => _gsMatcherSubmit(true), 800);
-          return;
-        }
-
-        // Update trick reference for next trick
-        setTimeout(() => {
-          const refCard = document.getElementById("gs-trick-ref");
-          if (refCard && line[_gsMatchIndex]) {
-            const oldCanvas = document.getElementById("gs-ref-canvas");
-            if (oldCanvas) stopCanvasAnim(oldCanvas);
-            const nextSamples = (_gsGame.current_line_samples || [])[_gsMatchIndex];
-            const newRef = _gsTrickRef(line[_gsMatchIndex], nextSamples);
-            refCard.replaceWith(newRef);
-            _gsStartRefAnim(nextSamples);
-          }
-          btn.textContent = "Trick aufnehmen";
-          btn.disabled = false;
-          btn.classList.remove("gs-btn-recording");
-        }, 800);
-      } else {
-        _gsMatchFailed = true;
-        _gsUpdateMatchPills(line, _gsMatchIndex);
-        _gsShowDetectFlash(result.trick, result.confidence, false);
-        btn.remove();
-        setTimeout(() => _gsMatcherSubmit(false), 800);
+    // Update reference card for next trick
+    setTimeout(() => {
+      const refCard = document.getElementById("gs-trick-ref");
+      if (refCard && line[_gsMatchIndex]) {
+        const oldCanvas = document.getElementById("gs-ref-canvas");
+        if (oldCanvas) stopCanvasAnim(oldCanvas);
+        const nextSamples = (_gsGame.current_line_samples || [])[_gsMatchIndex];
+        const newRef = _gsTrickRef(line[_gsMatchIndex], nextSamples);
+        refCard.replaceWith(newRef);
+        _gsStartRefAnim(nextSamples);
       }
-    } catch (err) {
-      if (status) status.textContent = "Fehler: " + err.message;
-      btn.textContent = "Trick aufnehmen";
-      btn.disabled = false;
-      btn.classList.remove("gs-btn-recording");
-    }
+    }, 800);
+  } else {
+    _gsMatchFailed = true;
+    _gsRecorder.stopActivation();
+    _gsUpdateMatchPills(line, _gsMatchIndex);
+    _gsShowDetectFlash(result.trick, result.confidence, false);
+    setTimeout(() => _gsMatcherSubmit(false), 800);
   }
 }
 

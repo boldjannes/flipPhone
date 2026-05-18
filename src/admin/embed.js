@@ -70,6 +70,7 @@ async function loadData() {
     collector: d.collector,
     duration_ms: d.duration_ms,
     sample_count: d.sample_count,
+    created_at: d.created_at,
     x: d.x,
     y: d.y,
     z: d.z,
@@ -298,12 +299,14 @@ function updateInfoPanel() {
   hint.style.display = "none";
   const selRecs = recordings.filter(r => selected.has(r.id));
 
-  listEl.innerHTML = selRecs.map(r => `
+  listEl.innerHTML = selRecs.map(r => {
+    const date = r.created_at ? r.created_at.slice(0, 10) : "?";
+    return `
     <div class="info-item">
       <span class="info-trick">${esc(r.trick)}</span>
-      <span class="info-meta">${esc(r.collector)} · ${(r.duration_ms / 1000).toFixed(1)}s · ${r.sample_count} samples</span>
-    </div>
-  `).join("");
+      <span class="info-meta">${esc(r.collector)} · ${(r.duration_ms / 1000).toFixed(1)}s · ${r.sample_count} samples · ${date}</span>
+    </div>`;
+  }).join("");
 
   btnDel.classList.remove("hidden");
   btnDel.textContent = `Delete ${selRecs.length} recording${selRecs.length > 1 ? "s" : ""}`;

@@ -66,7 +66,7 @@ export function closeSurvival() {
 }
 
 function _stopAll() {
-  if (_recorder) { _recorder.abort(); }
+  if (_recorder) { _recorder.stopActivation(); _recorder.abort(); }
   const canvas = document.getElementById("sv-canvas");
   if (canvas) stopCanvasAnim(canvas);
 }
@@ -109,6 +109,10 @@ async function _startGame() {
     await _recorder.initSensors().catch(() => {});
   }
 
+  _recorder.onTrickDetected   = _onTrickDetected;
+  _recorder.onActivationPhase = _onActivationPhase;
+  _recorder.onActivationMag   = _onActivationMag;
+
   _nextTrick();
 }
 
@@ -116,6 +120,7 @@ function _nextTrick() {
   const prevId = _st.currentTrick?.id ?? null;
   _st.currentTrick = _pickTrick(prevId);
   _renderPlay();
+  _recorder.startActivation({ threshold: 15, preBufMs: 200, postMs: 1400, cooldownMs: 1800 });
 }
 
 function _renderPlay() {
@@ -157,56 +162,52 @@ function _renderPlay() {
     startCanvasAnim(canvas, ref.samples);
   }
 
-  // Record button
-  const recordBtn = _el("button", "gs-record-btn", "Aufnehmen");
-  recordBtn.id = "sv-record-btn";
-  recordBtn.addEventListener("click", _toggleRecord);
-  c.appendChild(recordBtn);
-
-  // Status
-  c.appendChild(_el("div", "sv-status", ""));
-
   // Sensor permission
   if (_recorder?.needsPermission) {
     const permBtn = _el("button", "gs-submit-btn", "Sensor freigeben");
     permBtn.addEventListener("click", async () => {
       await _recorder.requestPermission();
       permBtn.remove();
+      _recorder.startActivation({ threshold: 15, preBufMs: 200, postMs: 1400, cooldownMs: 1800 });
     });
     c.appendChild(permBtn);
   }
+
+  // Activation status
+  const statusRow = _el("div", "sv-act-row");
+  const badge = _el("span", "sv-act-badge", "Listening…");
+  badge.id = "sv-act-badge";
+  badge.dataset.phase = "idle";
+  statusRow.appendChild(badge);
+
+  const meter = _el("div", "sv-act-meter");
+  const meterFill = _el("div", "sv-act-meter-fill");
+  meterFill.id = "sv-act-meter-fill";
+  meter.appendChild(meterFill);
+  statusRow.appendChild(meter);
+
+  c.appendChild(statusRow);
+  c.appendChild(_el("div", "sv-status", "Handy werfen — Trick wird automatisch erkannt"));
 }
 
-async function _toggleRecord() {
-  const btn    = document.getElementById("sv-record-btn");
-  const status = document.querySelector(".sv-status");
-  if (!btn) return;
+function _onTrickDetected(result) {
+  const success = result.confidence >= THRESHOLD;
+  if (success) _st.landed++;
+  else         _st.letters++;
+  _showFlash(success, result.trick, result.confidence);
+}
 
-  const recording = btn.classList.contains("gs-btn-recording");
+function _onActivationPhase(phase) {
+  const badge = document.getElementById("sv-act-badge");
+  if (!badge) return;
+  const labels = { idle: "Listening…", capturing: "Aufnahme!", cooldown: "Cooldown…" };
+  badge.textContent  = labels[phase] ?? phase;
+  badge.dataset.phase = phase;
+}
 
-  if (!recording) {
-    _recorder.startRecording();
-    btn.textContent = "Stoppen & Erkennen";
-    btn.classList.add("gs-btn-recording");
-    if (status) status.textContent = "Aufnahme läuft — mach deinen Trick!";
-  } else {
-    btn.textContent = "Auswerten…";
-    btn.disabled = true;
-    btn.classList.remove("gs-btn-recording");
-    if (status) status.textContent = "Analysiere…";
-
-    try {
-      const result  = await _recorder.stopAndPredict();
-      const success = result.confidence >= THRESHOLD;
-      if (success) _st.landed++;
-      else         _st.letters++;
-      _showFlash(success, result.trick, result.confidence);
-    } catch (err) {
-      if (status) status.textContent = "Fehler: " + err.message;
-      btn.textContent = "Aufnehmen";
-      btn.disabled = false;
-    }
-  }
+function _onActivationMag(mag) {
+  const fill = document.getElementById("sv-act-meter-fill");
+  if (fill) fill.style.width = Math.min((mag / 50) * 100, 100) + "%";
 }
 
 function _showFlash(success, trick, confidence) {

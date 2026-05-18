@@ -298,6 +298,56 @@ export class GameRecorder {
   /** Abort any running flow. */
   abort() {
     if (this._onAbort) this._onAbort();
+    this.stopActivation();
+  }
+
+  // ──────────────────────────────────────────────
+  // Activation (auto-trigger)
+  // ──────────────────────────────────────────────
+
+  /**
+   * Start continuous auto-detection.
+   * opts: { threshold, preBufMs, postMs, cooldownMs }
+   * Callbacks set on `this`: onTrickDetected, onActivationPhase, onActivationMag, onActivationError
+   */
+  startActivation(opts = {}) {
+    SensorKit.activate(
+      {
+        threshold:  opts.threshold  ?? 15,
+        preBufMs:   opts.preBufMs   ?? 200,
+        postMs:     opts.postMs     ?? 1400,
+        cooldownMs: opts.cooldownMs ?? 2000,
+      },
+      {
+        onCapture: async (samples) => {
+          try {
+            const resp = await fetch('/api/predict', {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ samples }),
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const result = await resp.json();
+            result.trick = normalizeTrick(result.trick);
+            if (result.confidence >= 0.85) this._saveRecording(samples, result.trick);
+            if (this.onTrickDetected) this.onTrickDetected({ ...result, samples });
+          } catch (err) {
+            if (this.onActivationError) this.onActivationError(err);
+          }
+        },
+        onPhase: (phase) => {
+          if (this.onActivationPhase) this.onActivationPhase(phase);
+        },
+        onMag: (mag) => {
+          if (this.onActivationMag) this.onActivationMag(mag);
+        },
+      },
+    );
+  }
+
+  /** Stop continuous auto-detection. */
+  stopActivation() {
+    SensorKit.deactivate();
   }
 
   // ──────────────────────────────────────────────

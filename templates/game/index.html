@@ -747,6 +747,33 @@
       }
       @keyframes gsRecPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
+      /* ── Activation UI (game-screen + survival) ── */
+      .gs-act-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 16px; width: 100%;
+      }
+      .gs-act-badge {
+        font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+        padding: 4px 10px; border: 1.5px solid var(--text); white-space: nowrap; flex-shrink: 0;
+      }
+      .gs-act-badge[data-phase="capturing"] { background: var(--danger); color: var(--bg); border-color: var(--danger); }
+      .gs-act-badge[data-phase="cooldown"]  { color: var(--dim); border-color: var(--dim); }
+      .gs-act-meter { flex: 1; height: 8px; background: rgba(255,255,255,0.15); position: relative; }
+      .gs-act-meter-fill { height: 100%; background: var(--text); width: 0%; transition: width 0.08s linear; }
+
+      /* ── Survival activation ── */
+      .sv-act-row {
+        display: flex; align-items: center; gap: 10px;
+      }
+      .sv-act-badge {
+        font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+        padding: 4px 10px; border: 1.5px solid var(--text); white-space: nowrap; flex-shrink: 0;
+      }
+      .sv-act-badge[data-phase="capturing"] { background: var(--danger); color: var(--bg); border-color: var(--danger); }
+      .sv-act-badge[data-phase="cooldown"]  { color: var(--dim); border-color: var(--dim); }
+      .sv-act-meter { flex: 1; height: 8px; background: #e5e5e5; }
+      .sv-act-meter-fill { height: 100%; background: var(--text); width: 0%; transition: width 0.08s linear; }
+
       .gs-submit-btn {
         width: 100%;
         padding: 16px;

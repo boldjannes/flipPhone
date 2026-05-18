@@ -120,6 +120,7 @@ def get_embeddings():
     db = get_db()
     rows = db.execute(
         '''SELECT r.id, r.trick, r.samples, r.duration_ms, r.sample_count,
+                  r.created_at,
                   COALESCE(k.name, u.username) AS collector
            FROM recordings r
            LEFT JOIN api_keys k ON r.key_id = k.id
@@ -141,6 +142,7 @@ def get_embeddings():
             'collector':    row['collector'],
             'duration_ms':  row['duration_ms'],
             'sample_count': row['sample_count'],
+            'created_at':   row['created_at'],
         }
         payload.append({'id': row['id'], 'samples': samples})
 
