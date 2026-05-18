@@ -355,7 +355,6 @@ def export_json():
 
 
 @admin.route('/settings')
-@require_admin
 def settings_page():
     return render_template('admin/settings.html')
 
