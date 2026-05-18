@@ -393,8 +393,18 @@ document.getElementById('anim-modal-gif').addEventListener('click', () => {
     workerScript: '/static/gif.worker.js',
     width:  result.frames[0].width,
     height: result.frames[0].height,
+    transparent: 0x00FF00,
   });
-  result.frames.forEach(f => gif.addFrame(f, { delay: result.delayMs }));
+  const W = result.frames[0].width, H = result.frames[0].height;
+  result.frames.forEach(f => {
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    const ctx = tmp.getContext('2d');
+    ctx.fillStyle = '#00FF00';
+    ctx.fillRect(0, 0, W, H);
+    ctx.drawImage(f, 0, 0);
+    gif.addFrame(tmp, { delay: result.delayMs });
+  });
   gif.on('finished', blob => {
     const trick = document.getElementById('anim-modal-trick').textContent || 'trick';
     const url = URL.createObjectURL(blob);
