@@ -354,6 +354,63 @@ def export_json():
     )
 
 
+@admin.route('/settings')
+@require_admin
+def settings_page():
+    return render_template('admin/settings.html')
+
+
+# ──────────────────────────────────────────────
+# /admin/api/settings
+# ──────────────────────────────────────────────
+
+_SETTING_KEYS = {
+    'activation_threshold',
+    'activation_pre_buf_ms',
+    'activation_post_ms',
+    'activation_cooldown_ms',
+    'confidence_threshold',
+}
+
+
+@admin.route('/api/settings', methods=['GET'])
+@require_admin
+def get_settings():
+    rows = get_db().execute('SELECT key, value FROM settings').fetchall()
+    result = {}
+    for row in rows:
+        try:
+            result[row['key']] = float(row['value'])
+        except ValueError:
+            result[row['key']] = row['value']
+    return jsonify(result)
+
+
+@admin.route('/api/settings', methods=['PUT'])
+@require_admin
+def update_settings():
+    data = request.get_json(silent=True) or {}
+    db = get_db()
+    for key, value in data.items():
+        if key not in _SETTING_KEYS:
+            return jsonify({'error': f'Unknown setting: {key}'}), 400
+        db.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+                   (key, str(value)))
+    db.commit()
+    rows = db.execute('SELECT key, value FROM settings').fetchall()
+    result = {}
+    for row in rows:
+        try:
+            result[row['key']] = float(row['value'])
+        except ValueError:
+            result[row['key']] = row['value']
+    return jsonify(result)
+
+
+# ──────────────────────────────────────────────
+# /admin/api/export
+# ──────────────────────────────────────────────
+
 @admin.route('/api/export/csv')
 @require_admin_or_key
 def export_csv():

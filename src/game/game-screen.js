@@ -4,6 +4,7 @@ import { getToken, getCachedUser } from "./auth.js";
 import { GameRecorder, normalizeTrick } from "./game-recorder.js";
 import { SensorKit } from "../shared/sensor.js";
 import { startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
+import { fetchSettings } from "../shared/settings.js";
 
 /**
  * Game Screen — fullscreen overlay for active gameplay.
@@ -37,6 +38,7 @@ export const TRICK_HINTS = {
 export let _gsGameId = null;
 export let _gsGame = null;
 export let _gsRecorder = null;
+export let _gsCfg = {};
 export let _gsLine = [];
 export let _gsRecording = false;
 export let _gsSubmitting = false;
@@ -176,12 +178,13 @@ export async function openGame(gameId) {
   GS.overlay().classList.remove("hidden");
   GS.content().innerHTML = '<div class="gs-loading">Laden...</div>';
 
-  // Fetch game state and references in parallel
+  // Fetch game state, references and settings in parallel
   try {
     const token = getToken();
     const [resp] = await Promise.all([
       fetch(`/game/api/games/${gameId}`, { headers: { Authorization: `Bearer ${token}` } }),
       _gsLoadReferences(),
+      fetchSettings().then(s => { _gsCfg = s; }),
     ]);
     if (!resp.ok) throw new Error("Game not found");
     _gsGame = await resp.json();
@@ -192,8 +195,10 @@ export async function openGame(gameId) {
 
   // Init recorder
   if (!_gsRecorder) {
-    _gsRecorder = new GameRecorder({ confidenceThreshold: 0.70 });
+    _gsRecorder = new GameRecorder({ confidenceThreshold: _gsCfg.confidence_threshold ?? 0.70 });
     await _gsRecorder.initSensors().catch(() => {});
+  } else {
+    _gsRecorder.confidenceThreshold = _gsCfg.confidence_threshold ?? 0.70;
   }
 
   _gsRender();
@@ -328,7 +333,12 @@ export function _gsRenderSetter(game) {
   _gsRecorder.onTrickDetected   = _gsSetterOnTrick;
   _gsRecorder.onActivationPhase = _gsOnPhase;
   _gsRecorder.onActivationMag   = _gsOnMag;
-  _gsRecorder.startActivation({ threshold: 15, preBufMs: 200, postMs: 1400, cooldownMs: 1800 });
+  _gsRecorder.startActivation({
+    threshold:  _gsCfg.activation_threshold   ?? 15,
+    preBufMs:   _gsCfg.activation_pre_buf_ms  ?? 200,
+    postMs:     _gsCfg.activation_post_ms     ?? 1400,
+    cooldownMs: _gsCfg.activation_cooldown_ms ?? 1800,
+  });
 }
 
 // ── Shared activation UI callbacks ────────────────
@@ -447,7 +457,12 @@ export function _gsRenderMatcher(game) {
   _gsRecorder.onTrickDetected   = _gsMatcherOnTrick;
   _gsRecorder.onActivationPhase = _gsOnPhase;
   _gsRecorder.onActivationMag   = _gsOnMag;
-  _gsRecorder.startActivation({ threshold: 15, preBufMs: 200, postMs: 1400, cooldownMs: 1800 });
+  _gsRecorder.startActivation({
+    threshold:  _gsCfg.activation_threshold   ?? 15,
+    preBufMs:   _gsCfg.activation_pre_buf_ms  ?? 200,
+    postMs:     _gsCfg.activation_post_ms     ?? 1400,
+    cooldownMs: _gsCfg.activation_cooldown_ms ?? 1800,
+  });
 }
 
 export function _gsTrickRef(trickId, samples) {

@@ -238,6 +238,22 @@ def list_tricks():
 
 
 # ──────────────────────────────────────────────
+# Settings (public read)
+# ──────────────────────────────────────────────
+
+@game.route('/game/api/settings')
+def get_settings():
+    rows = get_db().execute('SELECT key, value FROM settings').fetchall()
+    result = {}
+    for row in rows:
+        try:
+            result[row['key']] = float(row['value'])
+        except ValueError:
+            result[row['key']] = row['value']
+    return jsonify(result)
+
+
+# ──────────────────────────────────────────────
 # Survival mode
 # ──────────────────────────────────────────────
 

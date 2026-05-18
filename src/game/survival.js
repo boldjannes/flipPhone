@@ -2,12 +2,13 @@
 
 import { GameRecorder } from "./game-recorder.js";
 import { startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
+import { fetchSettings } from "../shared/settings.js";
 
-const SKATE     = "SKATE";
-const THRESHOLD = 0.80;
+const SKATE = "SKATE";
 
 let _tricks   = [];  // [{id, name}] from active model
 let _refs     = {};  // {trick_name: {samples}}
+let _cfg      = {};  // loaded from /game/api/settings
 let _recorder = null;
 let _st       = null;
 
@@ -37,6 +38,7 @@ async function _loadData() {
     _tricks = all.filter(t => activeIds.has(t.id));
   }
   if (refR?.ok) _refs = await refR.json();
+  _cfg = await fetchSettings();
 }
 
 function _pickTrick(excludeId = null) {
@@ -105,8 +107,10 @@ async function _startGame() {
   _st = { letters: 0, landed: 0, currentTrick: null };
 
   if (!_recorder) {
-    _recorder = new GameRecorder({ confidenceThreshold: THRESHOLD });
+    _recorder = new GameRecorder({ confidenceThreshold: _cfg.confidence_threshold ?? 0.80 });
     await _recorder.initSensors().catch(() => {});
+  } else {
+    _recorder.confidenceThreshold = _cfg.confidence_threshold ?? 0.80;
   }
 
   _recorder.onTrickDetected   = _onTrickDetected;
@@ -120,7 +124,12 @@ function _nextTrick() {
   const prevId = _st.currentTrick?.id ?? null;
   _st.currentTrick = _pickTrick(prevId);
   _renderPlay();
-  _recorder.startActivation({ threshold: 15, preBufMs: 200, postMs: 1400, cooldownMs: 1800 });
+  _recorder.startActivation({
+    threshold:   _cfg.activation_threshold   ?? 15,
+    preBufMs:    _cfg.activation_pre_buf_ms  ?? 200,
+    postMs:      _cfg.activation_post_ms     ?? 1400,
+    cooldownMs:  _cfg.activation_cooldown_ms ?? 1800,
+  });
 }
 
 function _renderPlay() {
@@ -168,7 +177,12 @@ function _renderPlay() {
     permBtn.addEventListener("click", async () => {
       await _recorder.requestPermission();
       permBtn.remove();
-      _recorder.startActivation({ threshold: 15, preBufMs: 200, postMs: 1400, cooldownMs: 1800 });
+      _recorder.startActivation({
+        threshold:   _cfg.activation_threshold   ?? 15,
+        preBufMs:    _cfg.activation_pre_buf_ms  ?? 200,
+        postMs:      _cfg.activation_post_ms     ?? 1400,
+        cooldownMs:  _cfg.activation_cooldown_ms ?? 1800,
+      });
     });
     c.appendChild(permBtn);
   }
@@ -191,7 +205,7 @@ function _renderPlay() {
 }
 
 function _onTrickDetected(result) {
-  const success = result.confidence >= THRESHOLD;
+  const success = result.confidence >= (_cfg.confidence_threshold ?? 0.80);
   if (success) _st.landed++;
   else         _st.letters++;
   _showFlash(success, result.trick, result.confidence);

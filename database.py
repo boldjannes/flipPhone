@@ -193,6 +193,25 @@ def init_db():
     ''')
     conn.execute('CREATE INDEX IF NOT EXISTS idx_sv_score ON survival_scores(score DESC)')
 
+    # Migration: settings key-value table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    ''')
+    _SETTING_DEFAULTS = [
+        ('activation_threshold',    '15'),
+        ('activation_pre_buf_ms',   '200'),
+        ('activation_post_ms',      '1400'),
+        ('activation_cooldown_ms',  '1800'),
+        ('confidence_threshold',    '0.80'),
+    ]
+    conn.executemany(
+        'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
+        _SETTING_DEFAULTS,
+    )
+
     # Seed default tricks if table is empty
     if conn.execute('SELECT COUNT(*) FROM tricks').fetchone()[0] == 0:
         default_tricks = [

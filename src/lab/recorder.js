@@ -2,6 +2,7 @@
 
 import { computeOrientations, getQAtTime, computeHeightFactors, getHeightAtTime, createPhoneScene, startCanvasAnim, stopCanvasAnim } from "../shared/phone-animation.js";
 import { SensorKit } from "../shared/sensor.js";
+import { fetchSettings } from "../shared/settings.js";
 
 // ─── State ─────────────────────────────────────
 export let TRICKS = [];
@@ -286,7 +287,12 @@ export function showToast(msg) {
 
 // ─── Init ──────────────────────────────────────
 export async function init() {
-  await Promise.all([loadTricks(), loadReferences(), loadRecordingCounts()]);
+  const [settings] = await Promise.all([
+    fetchSettings(),
+    loadTricks(), loadReferences(), loadRecordingCounts(),
+  ]);
+  state.activationThreshold = settings.activation_threshold ?? 15;
+
   state.selectedTrick = TRICKS[0];
   buildTrickGrid();
   $('selected-trick').textContent = state.selectedTrick;

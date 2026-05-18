@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1024">
+  <title>Settings — Admin — flipPhone</title>
+  <link rel="stylesheet" href="/static/admin.css">
+  <style>
+    .settings-form {
+      max-width: 520px;
+    }
+    .settings-section {
+      border: 1.5px solid var(--border);
+      margin-bottom: 28px;
+    }
+    .settings-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding: 10px 16px;
+      border-bottom: 1.5px solid var(--border);
+      background: #fafafa;
+    }
+    .setting-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+      gap: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .setting-row:last-child { border-bottom: none; }
+    .setting-label { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+    .setting-desc  { font-size: 11px; color: var(--dim); line-height: 1.4; }
+    .setting-input-wrap { display: flex; align-items: center; gap: 6px; }
+    .setting-input {
+      width: 80px; text-align: right;
+      font-family: var(--font-mono, monospace);
+      font-size: 14px; font-weight: 700;
+      padding: 5px 8px;
+      border: 1.5px solid var(--border);
+      background: #fff;
+    }
+    .setting-unit { font-size: 11px; color: var(--dim); white-space: nowrap; }
+    .form-actions { display: flex; gap: 10px; align-items: center; }
+    .save-status { font-size: 12px; color: var(--dim); }
+    .save-status.ok  { color: #1a7a1a; }
+    .save-status.err { color: var(--danger); }
+  </style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <div class="login-logo">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+    </div>
+    <div class="login-title">Admin Panel</div>
+    <form id="login-form">
+      <div class="form-row">
+        <label for="u">Username</label>
+        <input id="u" type="text" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="form-row">
+        <label for="p">Password</label>
+        <input id="p" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <div class="form-row" style="margin-top:20px">
+        <button type="submit" class="btn btn-full">Sign in</button>
+      </div>
+      <div id="login-error" class="error-msg"></div>
+    </form>
+  </div>
+</div>
+
+<!-- App -->
+<div id="app">
+  <header class="header">
+    <a class="wordmark" href="/admin/">
+      <img src="/static/flipphone_icon_bw.svg" alt="flipPhone">
+      <span class="wordmark-label">Admin</span>
+    </a>
+    <nav class="nav-links">
+      <a href="/admin/">Dashboard</a>
+      <a href="/admin/training">Training</a>
+      <a href="/admin/models">Models</a>
+      <a href="/admin/users">Users</a>
+      <a href="/admin/tricks">Tricks</a>
+      <a href="/admin/embed">Embeddings</a>
+      <a href="/admin/recordings">Recordings</a>
+      <a href="/admin/settings" class="active">Settings</a>
+    </nav>
+    <div class="header-right">
+      <span id="logged-in-as"></span>
+      <button class="btn btn-ghost btn-sm" id="logout-btn">Logout</button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="page-heading">Settings</div>
+
+    <form id="settings-form" class="settings-form">
+
+      <div class="settings-section">
+        <div class="settings-section-title">Activation</div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Threshold</div>
+            <div class="setting-desc">Minimum acceleration magnitude to trigger a capture. Lower = more sensitive.</div>
+          </div>
+          <div class="setting-input-wrap">
+            <input class="setting-input" type="number" id="activation_threshold" name="activation_threshold"
+                   min="1" max="100" step="0.5">
+            <span class="setting-unit">m/s²</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Pre-buffer</div>
+            <div class="setting-desc">Samples kept before the trigger spike.</div>
+          </div>
+          <div class="setting-input-wrap">
+            <input class="setting-input" type="number" id="activation_pre_buf_ms" name="activation_pre_buf_ms"
+                   min="0" max="1000" step="50">
+            <span class="setting-unit">ms</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Capture Window</div>
+            <div class="setting-desc">How long to record after the trigger fires.</div>
+          </div>
+          <div class="setting-input-wrap">
+            <input class="setting-input" type="number" id="activation_post_ms" name="activation_post_ms"
+                   min="500" max="5000" step="100">
+            <span class="setting-unit">ms</span>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Cooldown</div>
+            <div class="setting-desc">Pause after each capture before the next can start.</div>
+          </div>
+          <div class="setting-input-wrap">
+            <input class="setting-input" type="number" id="activation_cooldown_ms" name="activation_cooldown_ms"
+                   min="500" max="10000" step="100">
+            <span class="setting-unit">ms</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Recognition</div>
+
+        <div class="setting-row">
+          <div>
+            <div class="setting-label">Confidence Threshold</div>
+            <div class="setting-desc">Minimum model confidence to count a trick as landed in Survival and Game of Skate.</div>
+          </div>
+          <div class="setting-input-wrap">
+            <input class="setting-input" type="number" id="confidence_threshold" name="confidence_threshold"
+                   min="0.1" max="1.0" step="0.05">
+            <span class="setting-unit">0–1</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn">Save</button>
+        <span class="save-status" id="save-status"></span>
+      </div>
+
+    </form>
+  </main>
+</div>
+
+<script>
+const TOKEN_KEY = 'fp_admin_token';
+const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
+const authHeaders = () => ({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() });
+
+// ── Auth boilerplate (same as other admin pages) ──────────────────────
+const loginEl  = document.getElementById('login');
+const appEl    = document.getElementById('app');
+const loginForm = document.getElementById('login-form');
+const loginErr = document.getElementById('login-error');
+
+async function tryAuth(token) {
+  try {
+    const r = await fetch('/admin/api/users', { headers: { Authorization: 'Bearer ' + token } });
+    if (r.ok) { showApp(token); return; }
+  } catch (_) {}
+  showLogin();
+}
+
+function showLogin() { loginEl.style.display = ''; appEl.style.display = 'none'; }
+function showApp(token) {
+  loginEl.style.display = 'none'; appEl.style.display = '';
+  fetch('/game/api/auth/me', { headers: { Authorization: 'Bearer ' + token } })
+    .then(r => r.ok ? r.json() : null)
+    .then(me => { if (me) document.getElementById('logged-in-as').textContent = me.username; });
+  loadSettings();
+}
+
+const saved = getToken();
+if (saved) tryAuth(saved); else showLogin();
+
+loginForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  loginErr.textContent = '';
+  const u = document.getElementById('u').value.trim();
+  const p = document.getElementById('p').value;
+  const r = await fetch('/game/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: u, password: p }),
+  }).catch(() => null);
+  if (!r || !r.ok) { loginErr.textContent = 'Invalid credentials'; return; }
+  const data = await r.json();
+  if (data.role !== 'admin') { loginErr.textContent = 'Admin access required'; return; }
+  localStorage.setItem(TOKEN_KEY, data.token);
+  showApp(data.token);
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+  localStorage.removeItem(TOKEN_KEY);
+  showLogin();
+});
+
+// ── Settings ──────────────────────────────────────────────────────────
+async function loadSettings() {
+  const r = await fetch('/admin/api/settings', { headers: authHeaders() }).catch(() => null);
+  if (!r || !r.ok) return;
+  const s = await r.json();
+  for (const [key, value] of Object.entries(s)) {
+    const el = document.getElementById(key);
+    if (el) el.value = value;
+  }
+}
+
+document.getElementById('settings-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const status = document.getElementById('save-status');
+  status.textContent = 'Saving…';
+  status.className = 'save-status';
+
+  const keys = ['activation_threshold', 'activation_pre_buf_ms', 'activation_post_ms',
+                 'activation_cooldown_ms', 'confidence_threshold'];
+  const body = {};
+  for (const key of keys) {
+    const el = document.getElementById(key);
+    if (el) body[key] = parseFloat(el.value);
+  }
+
+  const r = await fetch('/admin/api/settings', {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  }).catch(() => null);
+
+  if (r && r.ok) {
+    status.textContent = 'Saved';
+    status.className = 'save-status ok';
+  } else {
+    status.textContent = 'Error saving';
+    status.className = 'save-status err';
+  }
+  setTimeout(() => { status.textContent = ''; status.className = 'save-status'; }, 3000);
+});
+</script>
+</body>
+</html>
