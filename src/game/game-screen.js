@@ -375,6 +375,77 @@ export function _gsSetterOnTrick(result) {
   }
 }
 
+export function _gsShowReplay(samples, trick, mode) {
+  _gsStopAnims();
+  const c = GS.content();
+  c.innerHTML = "";
+  _gsClearFooter();
+
+  const trickName = trick.replace(/_/g, " ").replace(/\b\w/g, ch => ch.toUpperCase());
+  c.appendChild(_gs("div", "gs-title", trickName));
+  c.appendChild(_gs("div", "gs-subtitle", "Trick erkannt!"));
+
+  if (samples && samples.length > 1) {
+    const wrap = _gs("div", "gs-ref-canvas-wrap");
+    const canvas = _gs("canvas", "gs-ref-canvas");
+    canvas.id = "gs-replay-canvas";
+    wrap.appendChild(canvas);
+    c.appendChild(wrap);
+    setTimeout(() => startCanvasAnim(canvas, samples), 0);
+  }
+
+  const footerEl = GS.footer();
+  if (!footerEl) return;
+  footerEl.innerHTML = "";
+  footerEl.classList.add("active");
+
+  if (mode === "setter-next") {
+    const nextBtn = _gs("button", "gs-submit-btn", "Noch einen Trick");
+    nextBtn.addEventListener("click", () => {
+      stopCanvasAnim(document.getElementById("gs-replay-canvas"));
+      _gsRenderSetter(_gsGame);
+    });
+    footerEl.appendChild(nextBtn);
+  }
+
+  const submitBtn = _gs("button", "gs-submit-btn accent-btn", "Line absenden");
+  submitBtn.addEventListener("click", () => {
+    stopCanvasAnim(document.getElementById("gs-replay-canvas"));
+    _gsSetterSubmit();
+  });
+  footerEl.appendChild(submitBtn);
+}
+
+export async function _gsSetterSubmit() {
+  if (_gsSubmitting) return;
+  _gsSubmitting = true;
+
+  try {
+    const token = getToken();
+    const resp = await fetch(`/game/api/games/${_gsGameId}/set-line`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        tricks: _gsLine.map(e => e.trick),
+        samples_per_trick: _gsLine.map(e => e.samples),
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || "Fehler beim Absenden");
+    }
+    _gsGame = await resp.json();
+    _gsSubmitting = false;
+    _gsLine = [];
+    _gsRender();
+  } catch (err) {
+    _gsSubmitting = false;
+    const c = GS.content();
+    const errEl = _gs("div", "gs-status", "Fehler: " + err.message);
+    c.appendChild(errEl);
+  }
+}
+
 // ──────────────────────────────────────────────
 // Sub-Screen B: Matcher
 // ──────────────────────────────────────────────

@@ -79,7 +79,12 @@
     .wordmark img { height: 22px; }
     .wordmark-label { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
 
-    .tab-nav { display: flex; height: 100%; flex: 1; }
+    .tab-nav {
+      display: flex; height: 100%; flex: 1; min-width: 0;
+      overflow-x: auto; overflow-y: hidden;
+      scrollbar-width: none;
+    }
+    .tab-nav::-webkit-scrollbar { display: none; }
     .tab-nav-btn {
       background: none; border: none; border-right: 1.5px solid var(--border);
       font-family: var(--font); font-size: 12px; font-weight: 700;
