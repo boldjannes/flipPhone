@@ -121,10 +121,10 @@ def get_embeddings():
     rows = db.execute(
         '''SELECT r.id, r.trick, r.samples, r.duration_ms, r.sample_count,
                   r.created_at,
-                  COALESCE(k.name, u.username) AS collector
+                  COALESCE(u.username, k.name) AS collector
            FROM recordings r
-           LEFT JOIN api_keys k ON r.key_id = k.id
            LEFT JOIN game_users u ON r.user_id = u.id
+           LEFT JOIN api_keys k ON r.key_id = k.id
            ORDER BY r.created_at DESC'''
     ).fetchall()
 
@@ -328,19 +328,19 @@ def delete_trick(trick_id):
 def _get_export_rows(db, min_confidence=None):
     if min_confidence is not None:
         return db.execute(
-            '''SELECT r.*, COALESCE(k.name, u.username) AS collector
+            '''SELECT r.*, COALESCE(u.username, k.name) AS collector
                FROM recordings r
-               LEFT JOIN api_keys k ON r.key_id = k.id
                LEFT JOIN game_users u ON r.user_id = u.id
+               LEFT JOIN api_keys k ON r.key_id = k.id
                WHERE r.confidence IS NULL OR r.confidence >= ?
                ORDER BY r.created_at DESC''',
             (min_confidence,),
         ).fetchall()
     return db.execute(
-        '''SELECT r.*, COALESCE(k.name, u.username) AS collector
+        '''SELECT r.*, COALESCE(u.username, k.name) AS collector
            FROM recordings r
-           LEFT JOIN api_keys k ON r.key_id = k.id
            LEFT JOIN game_users u ON r.user_id = u.id
+           LEFT JOIN api_keys k ON r.key_id = k.id
            ORDER BY r.created_at DESC'''
     ).fetchall()
 

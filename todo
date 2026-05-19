@@ -3,12 +3,13 @@ BUGS
 ═══════════════════════════════════════
 
 [HIGH]
-
+Survival last trick 
 
 [MEDIUM]
-
+Remove Record Button in Lab ()
 
 [LOW]
+empty folders in static
 
 
 ═══════════════════════════════════════
@@ -16,7 +17,6 @@ FEATURES
 ═══════════════════════════════════════
 
 [HIGH]
-- activation -> get rid of "record" and "stop" buttons
 
 [MEDIUM]
 - tutorial for each trick

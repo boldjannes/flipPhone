@@ -359,7 +359,7 @@ def save_game_recording():
             (
                 rec_id,
                 me,
-                1,  # default key_id — game recordings attributed to system
+                None,
                 trick,
                 now_iso(),
                 int(duration_ms),
