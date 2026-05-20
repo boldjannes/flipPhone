@@ -213,7 +213,10 @@ function _renderPlay() {
 }
 
 function _onTrickDetected(result) {
-  const success = result.confidence >= (_cfg.confidence_threshold ?? 0.80);
+  const requiredId  = _st.currentTrick?.id;
+  const detectedId  = result.trick;
+  const rightTrick  = requiredId && detectedId === requiredId;
+  const success = rightTrick && result.confidence >= (_cfg.confidence_threshold ?? 0.80);
   if (success) _st.landed++;
   else         _st.letters++;
   _showFlash(success, result.trick, result.confidence);
