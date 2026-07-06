@@ -192,10 +192,12 @@ def create_app():
     from blueprints.lab_bp import lab
     from blueprints.admin_bp import admin
     from blueprints.game_bp import game
+    from blueprints.game_friends_bp import friends
 
     app.register_blueprint(lab)
     app.register_blueprint(admin)
     app.register_blueprint(game)
+    app.register_blueprint(friends)
 
     log.info('FlipPhone app created, log level=%s', LOG_LEVEL)
 

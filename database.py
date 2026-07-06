@@ -361,3 +361,38 @@ def require_admin_or_key(f):
                 return f(*args, **kwargs)
         return jsonify({'error': 'Admin access required'}), 403
     return decorated
+
+
+def require_game_session(f):
+    """Validate Bearer token from Authorization header, set g.game_user."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            return jsonify({'error': 'Login required'}), 401
+        token = auth[7:]
+        db = get_db()
+        row = db.execute(
+            '''SELECT s.*, u.id AS uid, u.username, u.display_name, u.role,
+                      u.tricks_landed, u.games_won, u.games_lost
+               FROM game_sessions s
+               JOIN game_users u ON s.user_id = u.id
+               WHERE s.token = ? AND s.expires_at > ?''',
+            (token, now_iso()),
+        ).fetchone()
+        if not row:
+            return jsonify({'error': 'Session expired or invalid'}), 401
+        g.game_user = row
+        return f(*args, **kwargs)
+    return decorated
+
+
+def user_profile(row):
+    """Public user profile dict from a game_users db row."""
+    return {
+        'id': row['id'],
+        'username': row['username'],
+        'display_name': row['display_name'],
+        'tricks_landed': row['tricks_landed'],
+        'games_won': row['games_won'],
+    }

@@ -8,12 +8,11 @@ import logging
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
-from functools import wraps
 
 from flask import Blueprint, g, jsonify, render_template, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from database import get_db, normalize_trick, now_iso
+from database import get_db, normalize_trick, now_iso, require_game_session, user_profile
 
 log = logging.getLogger('flipphone.game')
 
@@ -45,30 +44,6 @@ def _user_response(row):
         'display_name': row['display_name'],
         'role': row['role'],
     }
-
-
-def require_game_session(f):
-    """Validate Bearer token from Authorization header, set g.game_user."""
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth = request.headers.get('Authorization', '')
-        if not auth.startswith('Bearer '):
-            return jsonify({'error': 'Login required'}), 401
-        token = auth[7:]
-        db = get_db()
-        row = db.execute(
-            '''SELECT s.*, u.id AS uid, u.username, u.display_name, u.role,
-                      u.tricks_landed, u.games_won, u.games_lost
-               FROM game_sessions s
-               JOIN game_users u ON s.user_id = u.id
-               WHERE s.token = ? AND s.expires_at > ?''',
-            (token, now_iso()),
-        ).fetchone()
-        if not row:
-            return jsonify({'error': 'Session expired or invalid'}), 401
-        g.game_user = row
-        return f(*args, **kwargs)
-    return decorated
 
 
 # ──────────────────────────────────────────────
@@ -172,25 +147,14 @@ def _get_tricks(db):
 
 
 
-def _user_profile(row):
-    """Extract public user profile from a db row."""
-    return {
-        'id': row['id'],
-        'username': row['username'],
-        'display_name': row['display_name'],
-        'tricks_landed': row['tricks_landed'],
-        'games_won': row['games_won'],
-    }
-
-
 def _game_state(row, db):
     """Build full game state dict from a games row."""
     challenger = db.execute('SELECT * FROM game_users WHERE id = ?', (row['challenger_id'],)).fetchone()
     opponent = db.execute('SELECT * FROM game_users WHERE id = ?', (row['opponent_id'],)).fetchone()
     return {
         'id': row['id'],
-        'challenger': _user_profile(challenger),
-        'opponent': _user_profile(opponent),
+        'challenger': user_profile(challenger),
+        'opponent': user_profile(opponent),
         'status': row['status'],
         'current_turn_id': row['current_turn_id'],
         'current_role': row['current_role'],
@@ -446,210 +410,6 @@ def poll():
 @game.route('/')
 def index():
     return render_template('game/index.html')
-
-
-# ──────────────────────────────────────────────
-# Friends API
-# ──────────────────────────────────────────────
-@game.route('/game/api/users/search')
-@require_game_session
-def search_users():
-    q = request.args.get('q', '').strip()
-    if len(q) < 2:
-        return jsonify([])
-
-    me = g.game_user['uid']
-    db = get_db()
-    pattern = f'%{q}%'
-    rows = db.execute(
-        '''SELECT u.* FROM game_users u
-           WHERE (u.username LIKE ? OR u.display_name LIKE ?)
-             AND u.id != ?
-             AND u.id NOT IN (
-                 SELECT CASE WHEN requester_id = ? THEN addressee_id ELSE requester_id END
-                 FROM friendships
-                 WHERE (requester_id = ? OR addressee_id = ?)
-                   AND status IN ('pending', 'accepted')
-             )
-           LIMIT 20''',
-        (pattern, pattern, me, me, me, me),
-    ).fetchall()
-
-    return jsonify([_user_profile(r) for r in rows])
-
-
-@game.route('/game/api/friends')
-@require_game_session
-def list_friends():
-    me = g.game_user['uid']
-    db = get_db()
-    rows = db.execute(
-        '''SELECT f.id AS friendship_id, f.created_at AS since,
-                  u.id, u.username, u.display_name, u.tricks_landed, u.games_won
-           FROM friendships f
-           JOIN game_users u ON u.id = CASE
-               WHEN f.requester_id = ? THEN f.addressee_id
-               ELSE f.requester_id END
-           WHERE (f.requester_id = ? OR f.addressee_id = ?)
-             AND f.status = 'accepted' ''',
-        (me, me, me),
-    ).fetchall()
-
-    return jsonify([{
-        'friendship_id': r['friendship_id'],
-        'user': _user_profile(r),
-        'since': r['since'],
-    } for r in rows])
-
-
-@game.route('/game/api/friends/requests')
-@require_game_session
-def friend_requests():
-    me = g.game_user['uid']
-    db = get_db()
-    rows = db.execute(
-        '''SELECT f.id AS friendship_id, f.created_at,
-                  u.id, u.username, u.display_name, u.tricks_landed, u.games_won
-           FROM friendships f
-           JOIN game_users u ON u.id = f.requester_id
-           WHERE f.addressee_id = ? AND f.status = 'pending' ''',
-        (me,),
-    ).fetchall()
-
-    return jsonify([{
-        'friendship_id': r['friendship_id'],
-        'from_user': _user_profile(r),
-        'created_at': r['created_at'],
-    } for r in rows])
-
-
-@game.route('/game/api/friends/sent')
-@require_game_session
-def sent_friend_requests():
-    me = g.game_user['uid']
-    db = get_db()
-    rows = db.execute(
-        '''SELECT f.id AS friendship_id, f.created_at,
-                  u.id, u.username, u.display_name, u.tricks_landed, u.games_won
-           FROM friendships f
-           JOIN game_users u ON u.id = f.addressee_id
-           WHERE f.requester_id = ? AND f.status = 'pending' ''',
-        (me,),
-    ).fetchall()
-
-    return jsonify([{
-        'friendship_id': r['friendship_id'],
-        'to_user': _user_profile(r),
-        'created_at': r['created_at'],
-    } for r in rows])
-
-
-@game.route('/game/api/friends/request', methods=['POST'])
-@require_game_session
-def send_friend_request():
-    data = request.get_json(silent=True) or {}
-    target_id = data.get('user_id')
-    if not target_id:
-        return jsonify({'error': 'user_id is required'}), 400
-
-    me = g.game_user['uid']
-    if target_id == me:
-        return jsonify({'error': 'Cannot befriend yourself'}), 400
-
-    db = get_db()
-
-    if not db.execute('SELECT 1 FROM game_users WHERE id = ?', (target_id,)).fetchone():
-        return jsonify({'error': 'User not found'}), 404
-
-    existing = db.execute(
-        '''SELECT id, status FROM friendships
-           WHERE (requester_id = ? AND addressee_id = ?)
-              OR (requester_id = ? AND addressee_id = ?)''',
-        (me, target_id, target_id, me),
-    ).fetchone()
-
-    if existing:
-        if existing['status'] == 'declined':
-            db.execute(
-                '''UPDATE friendships SET requester_id = ?, addressee_id = ?,
-                          status = 'pending', created_at = ?
-                   WHERE id = ?''',
-                (me, target_id, now_iso(), existing['id']),
-            )
-            db.commit()
-            return jsonify({'status': 'sent', 'friendship_id': existing['id']}), 201
-        return jsonify({'error': 'Friend request already exists'}), 409
-
-    cursor = db.execute(
-        'INSERT INTO friendships (requester_id, addressee_id, created_at) VALUES (?, ?, ?)',
-        (me, target_id, now_iso()),
-    )
-    db.commit()
-    log.info('Friend request: user %d -> user %d', me, target_id)
-    return jsonify({'status': 'sent', 'friendship_id': cursor.lastrowid}), 201
-
-
-@game.route('/game/api/friends/accept', methods=['POST'])
-@require_game_session
-def accept_friend():
-    data = request.get_json(silent=True) or {}
-    fid = data.get('friendship_id')
-    if not fid:
-        return jsonify({'error': 'friendship_id is required'}), 400
-
-    me = g.game_user['uid']
-    db = get_db()
-    row = db.execute('SELECT * FROM friendships WHERE id = ?', (fid,)).fetchone()
-    if not row:
-        return jsonify({'error': 'Request not found'}), 404
-    if row['addressee_id'] != me:
-        return jsonify({'error': 'Not your request to accept'}), 403
-    if row['status'] != 'pending':
-        return jsonify({'error': f'Request is already {row["status"]}'}), 409
-
-    db.execute("UPDATE friendships SET status = 'accepted' WHERE id = ?", (fid,))
-    db.commit()
-    log.info('Friend accepted: friendship %d by user %d', fid, me)
-    return jsonify({'status': 'accepted'})
-
-
-@game.route('/game/api/friends/decline', methods=['POST'])
-@require_game_session
-def decline_friend():
-    data = request.get_json(silent=True) or {}
-    fid = data.get('friendship_id')
-    if not fid:
-        return jsonify({'error': 'friendship_id is required'}), 400
-
-    me = g.game_user['uid']
-    db = get_db()
-    row = db.execute('SELECT * FROM friendships WHERE id = ?', (fid,)).fetchone()
-    if not row:
-        return jsonify({'error': 'Request not found'}), 404
-    if row['addressee_id'] != me:
-        return jsonify({'error': 'Not your request to decline'}), 403
-    if row['status'] != 'pending':
-        return jsonify({'error': f'Request is already {row["status"]}'}), 409
-
-    db.execute("UPDATE friendships SET status = 'declined' WHERE id = ?", (fid,))
-    db.commit()
-    return jsonify({'status': 'declined'})
-
-
-@game.route('/game/api/friends/<int:friendship_id>', methods=['DELETE'])
-@require_game_session
-def delete_friend(friendship_id):
-    me = g.game_user['uid']
-    db = get_db()
-    row = db.execute('SELECT * FROM friendships WHERE id = ?', (friendship_id,)).fetchone()
-    if not row:
-        return jsonify({'error': 'Friendship not found'}), 404
-    if row['requester_id'] != me and row['addressee_id'] != me:
-        return jsonify({'error': 'Not your friendship'}), 403
-
-    db.execute('DELETE FROM friendships WHERE id = ?', (friendship_id,))
-    db.commit()
-    return jsonify({'status': 'deleted'})
 
 
 # ──────────────────────────────────────────────
