@@ -37,6 +37,19 @@ export function _avatar(user, size) {
   return el;
 }
 
+/**
+ * Black section bar with a red numbered square, uppercase label and a
+ * thin rule — the recurring "Ausgabe"-style divider from the redesign.
+ */
+export function _sectionBar(num, label, count) {
+  const bar = _h("div", "home-section-bar");
+  bar.appendChild(_h("span", "hsb-num", String(num)));
+  bar.appendChild(_h("span", "hsb-label", label));
+  bar.appendChild(_h("span", "hsb-rule"));
+  if (count) bar.appendChild(_h("span", "hsb-count", count));
+  return bar;
+}
+
 export function _myUserId() {
   const u = getCachedUser();
   return u ? u.id : null;
@@ -88,6 +101,55 @@ export function renderSkateLetters(letters, labelPrefix) {
 
 export function renderGameCard(game, isMyTurn) {
   const opp = _opponent(game);
+  const oppName = opp.display_name || opp.username;
+
+  // ── My-turn hero card (ink ground, red shadow, Anton scream) ──
+  if (isMyTurn) {
+    const isSetter = game.current_role === "setter";
+    const card = _h("div", "home-game-card home-hero");
+    card.appendChild(_h("div", "fp-texture"));
+
+    const body = _h("div", "home-hero-body");
+
+    const tag = _h("div", "home-hero-tag");
+    tag.appendChild(_h("span", "home-hero-now", "Jetzt"));
+    tag.appendChild(_h("span", "home-hero-vs", `gegen ${oppName}`));
+    body.appendChild(tag);
+
+    const title = _h("div", "home-hero-title", isSetter ? "Trick zeigen" : "Nachmachen");
+    body.appendChild(title);
+
+    // Line pills (matcher only — the setter still has to throw a line)
+    if (!isSetter && game.current_line && game.current_line.length) {
+      const pills = _h("div", "home-hero-pills");
+      game.current_line.forEach((t, i) => {
+        pills.appendChild(_h("span", "home-hero-pill", `${i + 1} · ${t.replace(/_/g, " ")}`));
+      });
+      body.appendChild(pills);
+    }
+
+    const stands = _h("div", "home-game-stands home-hero-stands");
+    const myCol = _h("div", "home-hero-standcol");
+    myCol.appendChild(_h("span", "home-hero-standlbl", "Du"));
+    myCol.appendChild(renderSkateLetters(_myLetters(game), ""));
+    stands.appendChild(myCol);
+    const oppCol = _h("div", "home-hero-standcol");
+    oppCol.appendChild(_h("span", "home-hero-standlbl", oppName));
+    oppCol.appendChild(renderSkateLetters(_opponentLetters(game), ""));
+    stands.appendChild(oppCol);
+    body.appendChild(stands);
+
+    card.appendChild(body);
+
+    const btn = _h("button", "home-game-btn");
+    btn.innerHTML = `${isSetter ? "Line werfen" : "Line matchen"} <span style="font-size:20px">→</span>`;
+    btn.addEventListener("click", () => openGame(game.id));
+    card.appendChild(btn);
+
+    return card;
+  }
+
+  // ── Standard card (waiting on opponent) ──
   const card = _h("div", "home-game-card");
 
   // Top row: avatar + info
@@ -232,7 +294,7 @@ export function renderFriendScroller(friends) {
     item.appendChild(
       _h("div", "home-friend-name", f.user.display_name || f.user.username)
     );
-    const btn = _h("button", "home-challenge-btn accent-btn", "Challenge");
+    const btn = _h("button", "home-challenge-btn", "Call");
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       btn.textContent = "...";
@@ -294,26 +356,28 @@ export function renderHome(data, friends) {
     });
   }
 
-  // 1. Incoming invitations (most urgent — action required)
-  if (invitations.length) {
+  let secNum = 0;
+
+  // 1. My turn (most urgent — it's on you)
+  if (myTurnGames.length) {
     const sec = _h("div", "home-section");
-    sec.appendChild(_h("div", "home-section-title", "Einladungen"));
-    invitations.forEach((g) => sec.appendChild(renderInvitationCard(g)));
+    sec.appendChild(_sectionBar(++secNum, "Du bist dran", `${myTurnGames.length} offen`));
+    myTurnGames.forEach((g) => sec.appendChild(renderGameCard(g, true)));
     container.appendChild(sec);
   }
 
-  // 2. My turn
-  if (myTurnGames.length) {
+  // 2. Incoming invitations (action required)
+  if (invitations.length) {
     const sec = _h("div", "home-section");
-    sec.appendChild(_h("div", "home-section-title", "Du bist dran"));
-    myTurnGames.forEach((g) => sec.appendChild(renderGameCard(g, true)));
+    sec.appendChild(_sectionBar(++secNum, "Calls", `${invitations.length} offen`));
+    invitations.forEach((g) => sec.appendChild(renderInvitationCard(g)));
     container.appendChild(sec);
   }
 
   // 3. Waiting for opponent
   if (waitingGames.length) {
     const sec = _h("div", "home-section");
-    sec.appendChild(_h("div", "home-section-title", "Warten auf Gegner"));
+    sec.appendChild(_sectionBar(++secNum, "Am Laufen", `${waitingGames.length}`));
     waitingGames.forEach((g) => sec.appendChild(renderGameCard(g, false)));
     container.appendChild(sec);
   }
@@ -321,7 +385,7 @@ export function renderHome(data, friends) {
   // 4. Sent invitations (waiting for accept)
   if (sentInvitations.length) {
     const sec = _h("div", "home-section");
-    sec.appendChild(_h("div", "home-section-title", "Gesendete Einladungen"));
+    sec.appendChild(_sectionBar(++secNum, "Rausgeschickt", `${sentInvitations.length}`));
     sentInvitations.forEach((g) => sec.appendChild(renderSentInvitationCard(g)));
     container.appendChild(sec);
   }
@@ -329,7 +393,7 @@ export function renderHome(data, friends) {
   // 5. Challenge friends scroller
   if (friends && friends.length) {
     const sec = _h("div", "home-section");
-    sec.appendChild(_h("div", "home-section-title", "Freunde herausfordern"));
+    sec.appendChild(_sectionBar(++secNum, "Jemanden callen", ""));
     sec.appendChild(renderFriendScroller(friends));
     container.appendChild(sec);
   }
@@ -420,8 +484,12 @@ export async function loadGamesTab() {
     return;
   }
 
+  const me = _myUserId();
+  const wins = games.filter(g => g.winner_id === me).length;
+  const losses = games.length - wins;
+
   const sec = _h("div", "home-section");
-  sec.appendChild(_h("div", "home-section-title", "Spielverlauf"));
+  sec.appendChild(_sectionBar(1, "Ergebnisse", `${wins} W · ${losses} L`));
   games.forEach(g => sec.appendChild(renderHistoryCard(g)));
   container.appendChild(sec);
 }

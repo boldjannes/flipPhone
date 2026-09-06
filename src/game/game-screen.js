@@ -663,28 +663,30 @@ export function _gsRenderResult(prevGame, newGame, success) {
   c.innerHTML = "";
   _gsClearFooter();
 
-  const wrap = _gs("div", "gs-result-wrap");
+  // Full-ground takeover: ink on success, red on a bail.
+  const wrap = _gs("div", "gs-result-wrap " + (success ? "gs-ground-ink" : "gs-ground-red"));
 
-  // Icon
-  const icon = _gs("div", "gs-result-icon");
-  icon.textContent = success ? "\u2713" : "\u2717";
-  icon.classList.add(success ? "gs-result-success" : "gs-result-fail");
-  wrap.appendChild(icon);
-
-  // Message
   const me = _gsMyId();
   const myOldLetters = prevGame.challenger.id === me ? prevGame.challenger_letters : prevGame.opponent_letters;
   const myNewLetters = _gsMyLetters(newGame);
   const newLetter = myNewLetters.slice(myOldLetters.length);
+  const opp = _gsOpponent(newGame);
+  const oppName = opp.display_name || opp.username;
+  const gameOver = newGame.status === "finished";
 
   if (success) {
-    wrap.appendChild(_gs("div", "gs-result-title", "Geschafft!"));
-    wrap.appendChild(_gs("div", "gs-result-text", "Kein Buchstabe."));
+    wrap.appendChild(_gs("div", "gs-result-kicker", "Line gematcht"));
+    wrap.appendChild(_gs("div", "gs-result-title", "Clean"));
+    wrap.appendChild(_gs("div", "gs-result-text", "Kein Buchstabe. Du setzt die n\u00e4chste Line."));
   } else {
-    wrap.appendChild(_gs("div", "gs-result-title", "Nicht geschafft"));
+    wrap.appendChild(_gs("div", "gs-result-kicker", "Gebailt"));
+    wrap.appendChild(_gs("div", "gs-result-title", "Du hast"));
     if (newLetter) {
       wrap.appendChild(_gs("div", "gs-result-letter", newLetter));
-      wrap.appendChild(_gs("div", "gs-result-text", `Du bekommst "${newLetter}"`));
+      wrap.appendChild(_gs("div", "gs-result-text",
+        gameOver
+          ? `S-K-A-T-E. ${oppName} nimmt das Spiel.`
+          : `Buchstabe ${newLetter} geht auf dich.`));
     }
   }
 
@@ -696,26 +698,19 @@ export function _gsRenderResult(prevGame, newGame, success) {
     ch.textContent = word[i];
     if (i < myNewLetters.length) {
       ch.classList.add("gs-ch-active");
-      // Animate newly added letter
-      if (i >= myOldLetters.length) {
-        ch.classList.add("gs-ch-stamp");
-      }
+      if (i >= myOldLetters.length) ch.classList.add("gs-ch-stamp");
     }
     standWrap.appendChild(ch);
   }
   wrap.appendChild(standWrap);
 
   // Game over?
-  if (newGame.status === "finished") {
+  if (gameOver) {
     const won = newGame.winner_id === me;
-    const goText = _gs("div", "gs-result-gameover");
-    goText.textContent = won ? "Spiel gewonnen!" : "Spiel verloren.";
-    goText.classList.add(won ? "gs-result-success" : "gs-result-fail");
-    wrap.appendChild(goText);
+    wrap.appendChild(_gs("div", "gs-result-gameover", won ? "Spiel gewonnen" : "Spiel verloren"));
   }
 
-  // OK button
-  const okBtn = _gs("button", "gs-ok-btn accent-btn", "OK");
+  const okBtn = _gs("button", "gs-ok-btn", "Weiter");
   okBtn.addEventListener("click", () => closeGame());
   wrap.appendChild(okBtn);
 
@@ -802,20 +797,22 @@ export function _gsRenderFinished(game) {
   const won = game.winner_id === me;
   const opp = _gsOpponent(game);
 
-  c.appendChild(_gsBackBtn());
-  c.appendChild(_gsSkateBar(game));
+  const wrap = _gs("div", "gs-result-wrap " + (won ? "gs-ground-ink" : "gs-ground-red"));
+  wrap.appendChild(_gs("div", "gs-result-kicker", won ? "Sieg" : "Niederlage"));
+  wrap.appendChild(_gs("div", "gs-result-title", won ? "Gewonnen" : "Verloren"));
+  wrap.appendChild(_gs("div", "gs-result-text", `gegen ${opp.display_name || opp.username}`));
 
-  const wrap = _gs("div", "gs-result-wrap");
+  const standWrap = _gs("div", "gs-result-stand");
+  const word = "SKATE";
+  const myLetters = _gsMyLetters(game);
+  for (let i = 0; i < word.length; i++) {
+    const ch = _gs("span", "gs-skate-ch" + (i < myLetters.length ? " gs-ch-active" : ""));
+    ch.textContent = word[i];
+    standWrap.appendChild(ch);
+  }
+  wrap.appendChild(standWrap);
 
-  const icon = _gs("div", "gs-result-icon");
-  icon.textContent = won ? "\u2713" : "\u2717";
-  icon.classList.add(won ? "gs-result-success" : "gs-result-fail");
-  wrap.appendChild(icon);
-
-  wrap.appendChild(_gs("div", "gs-result-title", won ? "Gewonnen!" : "Verloren"));
-  wrap.appendChild(_gs("div", "gs-result-text", `gegen @${opp.username}`));
-
-  const okBtn = _gs("button", "gs-ok-btn accent-btn", "OK");
+  const okBtn = _gs("button", "gs-ok-btn", "Weiter");
   okBtn.addEventListener("click", () => closeGame());
   wrap.appendChild(okBtn);
 

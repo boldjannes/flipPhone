@@ -64,6 +64,7 @@ export async function openSurvival() {
 
 export function closeSurvival() {
   _stopAll();
+  SV.overlay().classList.remove("sv-over");
   SV.overlay().classList.add("hidden");
 }
 
@@ -77,6 +78,7 @@ function _stopAll() {
 
 function _showStart() {
   const c = SV.content();
+  SV.overlay().classList.remove("sv-over");
   c.innerHTML = "";
 
   const wrap = _el("div", "sv-center");
@@ -138,6 +140,7 @@ function _nextTrick() {
 
 function _renderPlay() {
   const c = SV.content();
+  SV.overlay().classList.remove("sv-over");
   c.innerHTML = "";
 
   const { letters, landed, currentTrick } = _st;
@@ -157,10 +160,19 @@ function _renderPlay() {
   c.appendChild(skateRow);
 
   // Score
-  c.appendChild(_el("div", "sv-score", `${landed} gelandet`));
+  const scoreRow = _el("div", "sv-final-score");
+  scoreRow.style.borderTop = "none";
+  scoreRow.style.paddingTop = "0";
+  const scoreNum = _el("div", "sv-final-score-num", String(landed));
+  scoreNum.style.color = "var(--red)";
+  scoreRow.appendChild(scoreNum);
+  const scoreLbl = _el("div", "sv-final-score-lbl", "gelandet");
+  scoreLbl.style.color = "var(--dim)";
+  scoreRow.appendChild(scoreLbl);
+  c.appendChild(scoreRow);
 
   // Trick prompt
-  c.appendChild(_el("div", "sv-prompt", "Lande diesen Trick:"));
+  c.appendChild(_el("div", "sv-prompt", "Lande diesen Trick"));
   c.appendChild(_el("div", "sv-trick-name", currentTrick.name));
 
   // Reference animation — always shown, placeholder when no ref
@@ -288,10 +300,14 @@ async function _submitAndShowGameOver() {
 
 function _showGameOver(pr, gr, rank, isNewPR) {
   const c = SV.content();
+  SV.overlay().classList.add("sv-over");   // flips the whole screen to the red ground
   c.innerHTML = "";
 
   const wrap = _el("div", "sv-center");
-  wrap.appendChild(_el("div", "sv-title", "Game Over"));
+
+  const title = _el("div", "sv-title");
+  title.innerHTML = "GAME<br>OVER";
+  wrap.appendChild(title);
 
   const skateRow = _el("div", "gs-skate-letters sv-skate-preview");
   for (const ch of SKATE) {
@@ -301,17 +317,20 @@ function _showGameOver(pr, gr, rank, isNewPR) {
   }
   wrap.appendChild(skateRow);
 
-  // Score
-  const scoreEl = _el("div", "sv-final-score",
-    `${_st.landed} Trick${_st.landed !== 1 ? "s" : ""}`);
-  if (isNewPR && _st.landed > 0) scoreEl.appendChild(_el("span", "sv-new-pr", " PR"));
-  wrap.appendChild(scoreEl);
+  // Big final score with "Tricks am Stück" label
+  const scoreRow = _el("div", "sv-final-score");
+  scoreRow.appendChild(_el("div", "sv-final-score-num", String(_st.landed)));
+  const scoreLbl = _el("div", "sv-final-score-lbl",
+    `Trick${_st.landed !== 1 ? "s" : ""} am Stück`);
+  if (isNewPR && _st.landed > 0) scoreLbl.appendChild(_el("span", "sv-new-pr", "PR"));
+  scoreRow.appendChild(scoreLbl);
+  wrap.appendChild(scoreRow);
 
-  // PR / GR row
+  // PR / GR / rank row
   if (pr !== null || gr !== null) {
     const stats = _el("div", "sv-stats-row");
-    if (pr !== null)  stats.appendChild(_svStat("PR", pr));
-    if (gr !== null)  stats.appendChild(_svStat("GR", gr.score, gr.name));
+    if (pr !== null)   stats.appendChild(_svStat("Dein PR", pr));
+    if (gr !== null)   stats.appendChild(_svStat(`GR · ${gr.name}`, gr.score));
     if (rank !== null) stats.appendChild(_svStat("Rang", `#${rank}`));
     wrap.appendChild(stats);
   }
@@ -320,7 +339,7 @@ function _showGameOver(pr, gr, rank, isNewPR) {
   again.addEventListener("click", _startGame);
   wrap.appendChild(again);
 
-  const back = _el("button", "gs-back-btn sv-back-gap", "← Zurück");
+  const back = _el("button", "gs-back-btn sv-back-gap", "Zurück zum Deck");
   back.addEventListener("click", closeSurvival);
   wrap.appendChild(back);
 
